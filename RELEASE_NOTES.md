@@ -17,7 +17,7 @@ Created by **MTM DSP** and published by **808SGN Labs**.
 
 ## Main result
 
-`hdemucs_mmi.yaml` is the default four-stem model. It completed a 130.29-second test song in 90 seconds, achieved 38.72 dB reconstruction SNR, and was audibly indistinguishable from standard HTDemucs in this test.
+`hdemucs_mmi.yaml` is the default four-stem model. It completed a 130.29-second test song in 90 seconds, achieved 38.72 dB reconstruction SNR, and produced results very similar to standard HTDemucs in informal listening.
 
 ## Known limitations
 

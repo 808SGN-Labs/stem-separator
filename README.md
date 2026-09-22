@@ -45,7 +45,7 @@ Local stem separation on Linux is already good enough for serious remixing and p
 
 - **Fastest high-quality four-stem model:** `hdemucs_mmi.yaml`
 - **Balanced reference four-stem model:** `htdemucs.yaml`
-- **Best maximum-quality four-stem model tested:** `htdemucs_ft.yaml`
+- **Fine-tuned four-stem alternative:** `htdemucs_ft.yaml`
 - **Best vocals/instrumental split tested:** `vocals_mel_band_roformer.ckpt`
 - **Best detailed drum split tested:** `MDX23C-DrumSep-aufr33-jarredou.ckpt`
 - **Six-stem Demucs:** useful when guitar or piano is genuinely present, but not automatically better
@@ -78,7 +78,9 @@ Suno can export native stems, and commercial services such as Voice.ai can separ
 
 The timings below are therefore conservative. A supported NVIDIA GPU should be substantially faster.
 
-## Installation
+## Manual installation (advanced)
+
+The quick-start installer above is recommended. If you use the manual location below, set `STEM_LAB_VENV` so the wrapper can find it. Export this variable again in each new terminal session before using the wrapper.
 
 Install FFmpeg:
 
@@ -94,6 +96,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 mkdir -p "$HOME/audio-separator"
 cd "$HOME/audio-separator"
+
+export STEM_LAB_VENV="$HOME/audio-separator/.venv"
 
 uv venv --python 3.12
 source .venv/bin/activate
@@ -150,7 +154,7 @@ MP3, WAV and other FFmpeg-supported formats can be used as input. Lossless WAV o
 |---|---:|---:|---:|---|
 | `hdemucs_mmi.yaml` | 4 stems | 1:30 | 38.72 dB | Fastest high-quality default candidate |
 | `htdemucs.yaml` | 4 stems | 2:40 | 37.28 dB | Excellent balanced reference |
-| `htdemucs_ft.yaml` | 4 stems | 8:37 | 27.40 dB | Slow maximum-quality alternative; audition on difficult material |
+| `htdemucs_ft.yaml` | 4 stems | 8:37 | 27.40 dB | Slow fine-tuned alternative; audition on difficult material |
 | `htdemucs_6s.yaml` | 6 stems | 1:56 | 22.71 dB | Experimental; extra stems were weak on this synth-heavy track |
 | `vocals_mel_band_roformer.ckpt` | vocals + other | about 10 min on another 218.6 s test | 66.5 dB | Best dedicated vocal split tested |
 | `MDX23C-DrumSep-aufr33-jarredou.ckpt` | 6 drum parts | 7:59 | 36.12 dB | Excellent advanced tool after isolating drums |
@@ -419,11 +423,11 @@ Before publishing benchmark audio:
 - avoid presenting reconstruction SNR as a universal perceptual leaderboard;
 - include exact software versions and hardware so readers can reproduce the test.
 
-Suggested license structure:
+Repository licensing:
 
 - **Article and documentation:** Creative Commons Attribution 4.0
 - **Scripts or future GUI code:** MIT License
-- **Audio examples:** All rights reserved unless explicitly licensed otherwise
+- **Audio examples:** Excluded from the repository licenses and all rights reserved unless explicitly licensed otherwise
 
 ---
 
