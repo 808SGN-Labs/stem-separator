@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: stem-separate PRESET INPUT [OUTPUT_DIR]
+
+Presets:
+  4stems     Fast four stems: bass, drums, other, vocals (default)
+  balanced   Standard HTDemucs four stems
+  maximum    Fine-tuned HTDemucs four stems
+  vocals     MelBand RoFormer vocals + instrumental
+  6stems     Experimental bass/drums/other/vocals/guitar/piano
+  drum-parts Kick/snare/toms/hi-hat/ride/crash; isolated drums only
+  deverb     Dry vocal + reverb; isolated vocals only
+
+Environment:
+  STEM_LAB_VENV      Override the virtual environment path
+  STEM_LAB_MODELS    Override the shared model directory
+EOF
+}
+
+[[ ${1:-} == "--help" || ${1:-} == "-h" ]] && { usage; exit 0; }
+[[ $# -ge 2 ]] || { usage >&2; exit 2; }
+
+PRESET=$1
+INPUT=$2
+OUTPUT=${3:-"$(dirname "$INPUT")/${PRESET}"}
+VENV=${STEM_LAB_VENV:-"${XDG_DATA_HOME:-$HOME/.local/share}/808sgn-stem-lab/.venv"}
+MODELS=${STEM_LAB_MODELS:-"${XDG_CACHE_HOME:-$HOME/.cache}/808sgn-stem-lab/models"}
+SEPARATOR="$VENV/bin/audio-separator"
+
+case "$PRESET" in
+  4stems)     MODEL=hdemucs_mmi.yaml ;;
+  balanced)   MODEL=htdemucs.yaml ;;
+  maximum)    MODEL=htdemucs_ft.yaml ;;
+  vocals)     MODEL=vocals_mel_band_roformer.ckpt ;;
+  6stems)     MODEL=htdemucs_6s.yaml ;;
+  drum-parts) MODEL=MDX23C-DrumSep-aufr33-jarredou.ckpt ;;
+  deverb)     MODEL=deverb_bs_roformer_8_384dim_10depth.ckpt ;;
+  *) echo "Unknown preset: $PRESET" >&2; usage >&2; exit 2 ;;
+esac
+
+[[ -f "$INPUT" ]] || { echo "Input not found: $INPUT" >&2; exit 1; }
+[[ -x "$SEPARATOR" ]] || {
+  echo "audio-separator not found at $SEPARATOR" >&2
+  echo "Run scripts/install.sh first or set STEM_LAB_VENV." >&2
+  exit 1
+}
+
+mkdir -p "$OUTPUT" "$MODELS"
+
+echo "Preset: $PRESET"
+echo "Model:  $MODEL"
+echo "Input:  $INPUT"
+echo "Output: $OUTPUT"
+
+"$SEPARATOR" "$INPUT" \
+  --model_filename "$MODEL" \
+  --model_file_dir "$MODELS" \
+  --output_dir "$OUTPUT" \
+  --output_format WAV

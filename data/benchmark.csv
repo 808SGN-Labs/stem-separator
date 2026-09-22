@@ -1,0 +1,7 @@
+model,outputs,runtime_seconds,source_seconds,realtime_factor,reconstruction_snr_db,verdict
+hdemucs_mmi.yaml,4,90,130.29,0.69,38.72,fastest high-quality default
+htdemucs.yaml,4,160,130.29,1.23,37.28,balanced reference
+htdemucs_ft.yaml,4,517,130.29,3.97,27.40,slow alternative for difficult material
+htdemucs_6s.yaml,6,116,130.29,0.89,22.71,experimental guitar and piano split
+MDX23C-DrumSep-aufr33-jarredou.ckpt,6,479,130.29,3.68,36.12,specialist isolated-drum pass
+deverb_bs_roformer_8_384dim_10depth.ckpt,2,1990,130.29,15.27,70.00,specialist isolated-vocal pass

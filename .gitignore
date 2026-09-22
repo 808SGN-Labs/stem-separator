@@ -1,0 +1,9 @@
+.venv/
+models/
+output/
+*.wav
+*.flac
+*.mp3
+*.ckpt
+*.onnx
+__pycache__/

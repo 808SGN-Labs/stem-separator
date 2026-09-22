@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If this benchmark helps your work, please cite it as below."
+title: "808SGN Stem Lab: Local AI Stem Separation on Linux"
+type: software
+version: 0.1.0
+date-released: 2026-09-22
+authors:
+  - name: "MTM DSP"
+license: MIT
+repository-code: "https://github.com/808sgn-labs/stem-separator"
