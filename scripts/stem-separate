@@ -26,7 +26,19 @@ EOF
 PRESET=$1
 INPUT=$2
 OUTPUT=${3:-"$(dirname "$INPUT")/${PRESET}"}
-VENV=${STEM_LAB_VENV:-"${XDG_DATA_HOME:-$HOME/.local/share}/808sgn-stem-lab/.venv"}
+DEFAULT_VENV="${XDG_DATA_HOME:-$HOME/.local/share}/808sgn-stem-lab/.venv"
+LEGACY_VENV="$HOME/audio-separator/.venv"
+
+if [[ -n ${STEM_LAB_VENV:-} ]]; then
+  VENV=$STEM_LAB_VENV
+elif [[ -x "$DEFAULT_VENV/bin/audio-separator" ]]; then
+  VENV=$DEFAULT_VENV
+elif [[ -x "$LEGACY_VENV/bin/audio-separator" ]]; then
+  VENV=$LEGACY_VENV
+else
+  VENV=$DEFAULT_VENV
+fi
+
 MODELS=${STEM_LAB_MODELS:-"${XDG_CACHE_HOME:-$HOME/.cache}/808sgn-stem-lab/models"}
 SEPARATOR="$VENV/bin/audio-separator"
 

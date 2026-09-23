@@ -374,30 +374,47 @@ That does not prove the dry vocal is perceptually artifact-free. Listen specific
 
 The practical verdict is straightforward: use de-reverb only when the original ambience obstructs a remix or when a new vocal space is required. At over 33 minutes for a 2:10 vocal on this CPU, it is too expensive for the default pipeline.
 
-## Proposed local GUI
+## Local GUI MVP
 
-A lightweight Linux GUI could turn this workflow into a practical desktop tool without hiding the model choices:
+The repository includes a lightweight Tkinter GUI for the Linux workflow.
+
+After completing the installation, launch it from the repository root:
+
+```bash
+python3 gui/stem_lab_gui.py
+```
+
+If Tkinter is unavailable on Ubuntu or Linux Mint:
+
+```bash
+sudo apt install python3-tk
+```
+
+The GUI uses the same `scripts/stem-separate` backend and shared model cache as the command-line workflow.
 
 | Preset | Model | Intended use |
 |---|---|---|
 | Fast 4 Stems | `hdemucs_mmi.yaml` | Fast everyday separation |
 | Balanced 4 Stems | `htdemucs.yaml` | Reference separation |
-| Maximum 4 Stems | `htdemucs_ft.yaml` | Difficult/final material |
+| Fine-Tuned 4 Stems | `htdemucs_ft.yaml` | Difficult or final material |
 | Vocals + Instrumental | `vocals_mel_band_roformer.ckpt` | Vocal extraction |
-| Experimental 6 Stems | `htdemucs_6s.yaml` | Guitar/piano material |
+| Six Stems | `htdemucs_6s.yaml` | Guitar or piano material |
 | Drum Parts | DrumSep | Isolated drum input only |
 | Vocal De-Reverb | BS-RoFormer de-reverb | Isolated vocal input only |
 
-Useful GUI requirements:
+The MVP currently provides:
 
-- drag-and-drop WAV, FLAC and MP3
-- same-folder or custom output
-- automatic model-specific subfolders
-- visible CPU/GPU mode
-- elapsed time and progress
-- displayed input and output sample rates
-- persistent shared model directory
-- no shell activation requirement; call the virtual environment executable directly
+- audio-file and output-folder selection;
+- automatic preset-specific output folders;
+- all seven separation presets;
+- live process output;
+- a running-state indicator;
+- cancellation of the active separation process;
+- direct access to the output folder;
+- automatic detection of the standard or legacy virtual environment;
+- no shell activation requirement.
+
+Drag-and-drop, detailed progress reporting, hardware-mode display and packaged desktop launchers remain future improvements.
 
 ## Conclusions
 
@@ -426,7 +443,7 @@ Before publishing benchmark audio:
 Repository licensing:
 
 - **Article and documentation:** Creative Commons Attribution 4.0
-- **Scripts or future GUI code:** MIT License
+- **Scripts and GUI code:** MIT License
 - **Audio examples:** Excluded from the repository licenses and all rights reserved unless explicitly licensed otherwise
 
 ---
