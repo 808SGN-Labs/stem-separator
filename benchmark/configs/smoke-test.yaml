@@ -1,0 +1,15 @@
+experiment: smoke-test-001
+
+model:
+  engine: audio-separator
+  name: htdemucs.yaml
+
+inference:
+  output_format: WAV
+
+measurement:
+  capture_environment: true
+  runtime: true
+  peak_ram: true
+  hash_input: true
+  hash_outputs: true
