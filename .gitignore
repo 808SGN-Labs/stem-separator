@@ -8,3 +8,5 @@ output/
 *.onnx
 __pycache__/
 *.py[cod]
+data/results/*
+!data/results/.gitkeep
