@@ -1,0 +1,9 @@
+experiment: smoke-test-001
+
+run_notes:
+  - category: source_leakage
+    expected_source: drums
+    observed_in: bass
+    content: kick_bass_drum
+    severity: noticeable
+    note: "Bass drum is clearly audible in the Bass stem."

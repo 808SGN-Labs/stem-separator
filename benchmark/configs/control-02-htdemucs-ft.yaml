@@ -1,0 +1,17 @@
+experiment: control-02-htdemucs-ft-001
+
+input:
+  path: tests/audio/control-02-viet-female-rap.wav
+  sha256: b5e430166dfd8656ae49cd69c03279d33510cd19ee43408f2dae694420bab667
+  material: original_vietnamese_female_rap
+  source_type: original_production
+  ai_generated: false
+  language: vi
+  vocal_style: female_rap
+  excerpt_start_seconds: 12
+  excerpt_duration_seconds: 30
+
+model:
+  engine: audio-separator
+  preset: maximum
+  name: htdemucs_ft.yaml

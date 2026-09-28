@@ -1,0 +1,626 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>QCWindow</class>
+ <widget class="QMainWindow" name="QCWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1100</width>
+    <height>720</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>1000</width>
+    <height>650</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>StemLab QC</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="mainLayout">
+    <property name="spacing">
+     <number>16</number>
+    </property>
+    <property name="leftMargin">
+     <number>24</number>
+    </property>
+    <property name="topMargin">
+     <number>20</number>
+    </property>
+    <property name="rightMargin">
+     <number>24</number>
+    </property>
+    <property name="bottomMargin">
+     <number>20</number>
+    </property>
+    <item>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <item>
+       <widget class="QLabel" name="titleLabel">
+        <property name="styleSheet">
+         <string>font-size: 22px; font-weight: 700;</string>
+        </property>
+        <property name="text">
+         <string>STEMLAB QC</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="runLabel">
+        <property name="text">
+         <string>Run</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="runComboBox">
+        <property name="minimumSize">
+         <size>
+          <width>420</width>
+          <height>0</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="headerSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QLabel" name="experimentLabel">
+        <property name="text">
+         <string>CONTROL-01 / HTDemucs</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="modeGroup">
+      <property name="title">
+       <string>Mode</string>
+      </property>
+      <layout class="QHBoxLayout" name="modeLayout">
+       <item>
+        <widget class="QPushButton" name="runQcModeButton">
+         <property name="text">
+          <string>RUN QC</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="blindModeButton">
+         <property name="text">
+          <string>BLIND COMPARE</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="modeSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="sourceGroup">
+      <property name="title">
+       <string>Source</string>
+      </property>
+      <layout class="QHBoxLayout" name="sourceLayout">
+       <item>
+        <widget class="QPushButton" name="mixButton">
+         <property name="maximumSize">
+          <size>
+           <width>16777195</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>1  SOURCE</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="reconButton">
+         <property name="text">
+          <string>2 RECON</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="bassButton">
+         <property name="text">
+          <string>3  BASS</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="drumsButton">
+         <property name="text">
+          <string>4  DRUMS</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="otherButton">
+         <property name="text">
+          <string>5  OTHER</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="vocalsButton">
+         <property name="text">
+          <string>6  VOCALS</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="blindSourceGroup">
+      <property name="title">
+       <string>Blind candidates</string>
+      </property>
+      <layout class="QHBoxLayout" name="blindSourceLayout">
+       <item><widget class="QPushButton" name="candidateAButton"><property name="text"><string>A</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+       <item><widget class="QPushButton" name="candidateBButton"><property name="text"><string>B</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+       <item><widget class="QPushButton" name="candidateCButton"><property name="text"><string>C</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+       <item><widget class="QPushButton" name="candidateDButton"><property name="text"><string>D</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+       <item><widget class="QPushButton" name="candidateEButton"><property name="text"><string>E</string></property><property name="checkable"><bool>true</bool></property></widget></item>
+       <item>
+        <spacer name="blindCandidateSpacer">
+         <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="blindStatusLabel">
+         <property name="text"><string>Scored 0/5  •  Models hidden</string></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="waveformPlaceholder" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>150</height>
+       </size>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="transportGroup">
+      <property name="title">
+       <string>Audition</string>
+      </property>
+      <layout class="QVBoxLayout" name="transportOuterLayout">
+       <item>
+        <layout class="QHBoxLayout" name="timelineLayout">
+         <item>
+          <widget class="QLabel" name="currentTimeLabel">
+           <property name="text">
+            <string>00:00</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSlider" name="positionSlider">
+           <property name="maximum">
+            <number>30000</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="durationLabel">
+           <property name="text">
+            <string>00:30</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="transportLayout">
+         <item>
+          <spacer name="transportLeftSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="playButton">
+           <property name="minimumSize">
+            <size>
+             <width>90</width>
+             <height>38</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>▶  PLAY</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="loopCheckBox">
+           <property name="text">
+            <string>Loop</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="transportRightSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="currentStemLayout">
+      <item>
+       <widget class="QLabel" name="currentStemCaption">
+        <property name="text">
+         <string>Current:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="currentStemLabel">
+        <property name="styleSheet">
+         <string>font-size: 18px; font-weight: 700;</string>
+        </property>
+        <property name="text">
+         <string>MIX</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="currentStemSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="qcGroup">
+      <property name="title">
+       <string>Human QC</string>
+      </property>
+      <layout class="QVBoxLayout" name="qcLayout">
+       <item>
+        <layout class="QHBoxLayout" name="usabilityLayout">
+         <item>
+          <widget class="QLabel" name="usabilityLabel">
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>Usability</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="goodRadio">
+           <property name="text">
+            <string>Good</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="acceptableRadio">
+           <property name="text">
+            <string>Acceptable</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="poorRadio">
+           <property name="text">
+            <string>Poor</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="usabilitySpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QGridLayout" name="issuesLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="issuesLabel">
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>Issues</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QCheckBox" name="leakageCheck">
+           <property name="text">
+            <string>Leakage</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QCheckBox" name="artifactsCheck">
+           <property name="text">
+            <string>Artifacts</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="3">
+          <widget class="QCheckBox" name="missingCheck">
+           <property name="text">
+            <string>Missing source</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QCheckBox" name="transientsCheck">
+           <property name="text">
+            <string>Transients</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QCheckBox" name="lowEndCheck">
+           <property name="text">
+            <string>Low-end</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="3">
+          <widget class="QCheckBox" name="otherIssueCheck">
+           <property name="text">
+            <string>Other</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QLabel" name="notesLabel">
+         <property name="text">
+          <string>Notes</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPlainTextEdit" name="notesEdit">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>90</height>
+          </size>
+         </property>
+         <property name="placeholderText">
+          <string>Optional listening notes…</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QGroupBox" name="blindQcGroup">
+      <property name="title"><string>Blind vocal score</string></property>
+      <layout class="QVBoxLayout" name="blindQcLayout">
+       <item>
+        <layout class="QGridLayout" name="blindScoreGrid">
+         <item row="0" column="0"><widget class="QLabel" name="isolationLabel"><property name="text"><string>Vocal isolation</string></property></widget></item>
+         <item row="0" column="1"><widget class="QSpinBox" name="isolationSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
+         <item row="0" column="2"><widget class="QLabel" name="isolationHelp"><property name="text"><string>instrumental bleed</string></property></widget></item>
+         <item row="1" column="0"><widget class="QLabel" name="integrityLabel"><property name="text"><string>Vocal integrity</string></property></widget></item>
+         <item row="1" column="1"><widget class="QSpinBox" name="integritySpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
+         <item row="1" column="2"><widget class="QLabel" name="integrityHelp"><property name="text"><string>natural / intact vocal</string></property></widget></item>
+         <item row="2" column="0"><widget class="QLabel" name="artifactLabel"><property name="text"><string>Artifact control</string></property></widget></item>
+         <item row="2" column="1"><widget class="QSpinBox" name="artifactSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
+         <item row="2" column="2"><widget class="QLabel" name="artifactHelp"><property name="text"><string>warble / metallic / phase damage</string></property></widget></item>
+         <item row="3" column="0"><widget class="QLabel" name="detailLabel"><property name="text"><string>Low-level detail</string></property></widget></item>
+         <item row="3" column="1"><widget class="QSpinBox" name="detailSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
+         <item row="3" column="2"><widget class="QLabel" name="detailHelp"><property name="text"><string>breaths / consonants / tails</string></property></widget></item>
+         <item row="4" column="0"><widget class="QLabel" name="remixLabel"><property name="text"><string>Remix usability</string></property></widget></item>
+         <item row="4" column="1"><widget class="QSpinBox" name="remixSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
+         <item row="4" column="2"><widget class="QLabel" name="remixHelp"><property name="text"><string>would you actually use this stem?</string></property></widget></item>
+        </layout>
+       </item>
+       <item><widget class="QLabel" name="blindNotesLabel"><property name="text"><string>Notes</string></property></widget></item>
+       <item><widget class="QPlainTextEdit" name="blindNotesEdit"><property name="minimumSize"><size><width>0</width><height>70</height></size></property><property name="placeholderText"><string>Bleed, warble, missing consonants, phase issues…</string></property></widget></item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="overallLayout">
+      <item>
+       <widget class="QLabel" name="overallLabel">
+        <property name="text">
+         <string>Overall</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="usableRadio">
+        <property name="text">
+         <string>Usable</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="marginalRadio">
+        <property name="text">
+         <string>Marginal</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="unusableRadio">
+        <property name="text">
+         <string>Unusable</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="bottomSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="revealButton">
+        <property name="minimumSize"><size><width>130</width><height>38</height></size></property>
+        <property name="text"><string>REVEAL MODELS</string></property>
+        <property name="enabled"><bool>false</bool></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="saveButton">
+        <property name="minimumSize">
+         <size>
+          <width>90</width>
+          <height>38</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>SAVE</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="saveNextButton">
+        <property name="minimumSize">
+         <size>
+          <width>130</width>
+          <height>38</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>SAVE + NEXT</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

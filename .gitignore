@@ -10,3 +10,8 @@ __pycache__/
 *.py[cod]
 data/results/*
 !data/results/.gitkeep
+.venv-gui/
+
+# Generated benchmark/listening artifacts
+data/batch-logs/
+data/listening/**/*.wav
