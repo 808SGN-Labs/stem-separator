@@ -41,17 +41,26 @@ affiliated with the upstream projects.
 
 ## Short version
 
-Local stem separation on Linux is already good enough for serious remixing and production—even without a dedicated GPU.
+Local stem separation on Linux is already practical for remixing and production
+without dedicated ML acceleration.
 
-- **Fastest high-quality four-stem model:** `hdemucs_mmi.yaml`
-- **Balanced reference four-stem model:** `htdemucs.yaml`
-- **Fine-tuned four-stem alternative:** `htdemucs_ft.yaml`
-- **Best vocals/instrumental split tested:** `vocals_mel_band_roformer.ckpt`
-- **Best detailed drum split tested:** `MDX23C-DrumSep-aufr33-jarredou.ckpt`
-- **Six-stem Demucs:** useful when guitar or piano is genuinely present, but not automatically better
-- **Suno native stems:** useful creative exports, but not phase-accurate components of the downloaded master
+Current evidence suggests different models are useful for different tasks:
 
-For this test song, HDemucs MMI produced the highest four-stem reconstruction score while also finishing fastest. Its individual stems remained very close to regular and fine-tuned HTDemucs. Subject to listening for artifacts, it is the strongest default candidate.
+- `hdemucs_mmi.yaml` is the fastest four-stem option in the current CPU tests
+- `htdemucs.yaml` remains a useful balanced four-stem reference
+- `htdemucs_6s.yaml` is a strong multi-stem candidate when six-way separation is useful
+- `vocals_mel_band_roformer.ckpt` is the strongest dedicated vocal-isolation candidate
+  in the current Blind Vocal tests
+- `htdemucs_ft.yaml` is substantially slower and has not yet shown a consistent
+  vocal-quality advantage in the controlled tests
+- specialist drum and de-reverb models remain optional second-stage tools
+
+The controlled benchmark currently uses two 30-second sources, one warm-up plus
+three measured CPU runs per model, and a blind vocal listening workflow.
+
+These results are preliminary and should not be interpreted as a universal model
+ranking. See [Preliminary Results v0.1](research/results-v0.1.md) for the current
+controlled benchmark and listening results.
 
 ## Why this test exists
 
@@ -429,6 +438,24 @@ The useful lesson is not “one model wins everything.” It is to use the narro
 - Suno native stems offer useful semantic categories, but should not be mistaken for a phase-accurate decomposition of the master.
 
 On a Ryzen 7 5700G with no ML acceleration, the workflow is already viable. A supported GPU would mainly improve iteration speed; it would not remove the need to choose the right model and audition the result.
+
+## Research results
+
+StemLab includes a reproducible CPU benchmark and blind listening workflow.
+
+Current preliminary research covers two 30-second control sources across five
+separation configurations using one discarded warm-up plus three measured runs.
+
+Early observations include:
+
+- separation runtime varies substantially with source material, even at equal duration
+- MelBand RoFormer achieved 5/5 vocal isolation on both current Blind Vocal controls
+- HTDemucs 6s remains a strong multi-stem candidate with substantially lower CPU runtime
+  than the tested vocal RoFormer configuration
+- Blind Vocal evaluates vocal extraction only and is not a full multi-stem model ranking
+
+See [Preliminary Results v0.1](research/results-v0.1.md) for methodology,
+runtime measurements, blind scores, limitations, and next steps.
 
 ## Publication notes
 
