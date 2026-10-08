@@ -55,12 +55,25 @@ Current evidence suggests different models are useful for different tasks:
   vocal-quality advantage in the controlled tests
 - specialist drum and de-reverb models remain optional second-stage tools
 
-The controlled benchmark currently uses two 30-second sources, one warm-up plus
-three measured CPU runs per model, and a blind vocal listening workflow.
+The latest listening pilot covers three 30-second controls, one listener and
+four categories: vocals, bass, drums and Other/Music (270 criterion ratings).
+The benchmark workflow uses a warm-up and three measured CPU runs per model.
 
-These results are preliminary and should not be interpreted as a universal model
-ranking. See [Preliminary Results v0.1](research/results-v0.1.md) for the current
-controlled benchmark and listening results.
+Observed listening leaders by stem: vocals — MelBand RoFormer (3.87/5),
+bass — htdemucs_ft (4.07/5), drums — htdemucs (4.33/5),
+Other/Music — htdemucs_6s and htdemucs_ft (both 3.07/5).
+These are stem-specific pilot scores, **not** a universal model ranking.
+The RoFormer instrumental residual is not directly comparable with a dedicated
+Demucs Other stem.
+
+`balanced` (htdemucs) remains the CPU-first general default; `vocals` and
+`maximum` are task-specific alternatives. See the
+[three-control listening consolidation](research/listening-consolidated-2026-10-08.md)
+and [preliminary CPU benchmark](research/results-v0.1.md).
+
+Private listening audio, scores and randomized model mappings are excluded from
+publication. The research results are preliminary, with no independent listeners
+or statistical significance claim.
 
 ## Why this test exists
 

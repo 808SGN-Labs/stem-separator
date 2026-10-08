@@ -4,19 +4,21 @@ import json
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QTimer, QUrl
+from PySide6.QtCore import Qt, QFile, QTimer, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
-    QComboBox,
+    QCheckBox,
+    QRadioButton,
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
 )
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QPalette, QKeySequence, QShortcut
 
 from waveform import WaveformWidget
 from reconstruct import build_reconstruction
@@ -33,6 +35,15 @@ class QCApp:
         self.window = self.load_ui()
 
         self.waveform = WaveformWidget(self.window.waveformPlaceholder)
+        palette = self.waveform.palette()
+        for role, color in (
+            (QPalette.Base, "#111820"),
+            (QPalette.Highlight, "#73d6c6"),
+            (QPalette.Mid, "#35434f"),
+            (QPalette.Text, "#e8c589"),
+        ):
+            palette.setColor(role, QColor(color))
+        self.waveform.setPalette(palette)
         placeholder_layout = self.window.waveformPlaceholder.layout()
         if placeholder_layout is None:
             placeholder_layout = QVBoxLayout(self.window.waveformPlaceholder)
@@ -65,6 +76,7 @@ class QCApp:
         self.current_source = "mix"
 
         self.mode = "run"
+        self.blind_kind = "vocal"
         self.blind_pack_dir = DEFAULT_BLIND_PACK
         self.blind_sources = {}
         self.blind_scores = {}
@@ -79,7 +91,11 @@ class QCApp:
             "stems": {},
         }
 
+        self.window.blindOtherModeButton = QPushButton("BLIND OTHER", self.window.modeGroup)
+        self.window.blindOtherModeButton.setCheckable(True)
+        self.window.modeGroup.layout().insertWidget(4, self.window.blindOtherModeButton)
         self.setup_groups()
+        self.setup_blind_score_radios()
         self.connect_ui()
         self.setup_blind_pack_selector()
         self.populate_run_selector()
@@ -120,6 +136,9 @@ class QCApp:
         self.mode_group.setExclusive(True)
         self.mode_group.addButton(self.window.runQcModeButton)
         self.mode_group.addButton(self.window.blindModeButton)
+        self.mode_group.addButton(self.window.blindBassModeButton)
+        self.mode_group.addButton(self.window.blindDrumsModeButton)
+        self.mode_group.addButton(self.window.blindOtherModeButton)
 
         self.blind_candidate_group = QButtonGroup(self.window)
         self.blind_candidate_group.setExclusive(True)
@@ -134,7 +153,6 @@ class QCApp:
 
         self.usability_group = QButtonGroup(self.window)
         self.usability_group.setExclusive(True)
-
         for button in [
             self.window.goodRadio,
             self.window.acceptableRadio,
@@ -144,7 +162,6 @@ class QCApp:
 
         self.overall_group = QButtonGroup(self.window)
         self.overall_group.setExclusive(True)
-
         for button in [
             self.window.usableRadio,
             self.window.marginalRadio,
@@ -153,245 +170,322 @@ class QCApp:
             self.overall_group.addButton(button)
 
     def connect_ui(self):
-        self.window.mixButton.clicked.connect(
-            lambda: self.switch_source("mix")
-        )
-        self.window.reconButton.clicked.connect(
-            lambda: self.switch_source("recon")
-        )
-        self.window.bassButton.clicked.connect(
-            lambda: self.switch_source("bass")
-        )
-        self.window.drumsButton.clicked.connect(
-            lambda: self.switch_source("drums")
-        )
-        self.window.otherButton.clicked.connect(
-            lambda: self.switch_source("other")
-        )
-        self.window.vocalsButton.clicked.connect(
-            lambda: self.switch_source("vocals")
-        )
-
+        self.window.mixButton.clicked.connect(self.select_original_source)
+        self.window.reconButton.clicked.connect(lambda: self.switch_source("recon"))
+        self.window.bassButton.clicked.connect(lambda: self.switch_source("bass"))
+        self.window.drumsButton.clicked.connect(lambda: self.switch_source("drums"))
+        self.window.otherButton.clicked.connect(lambda: self.switch_source("other"))
+        self.window.vocalsButton.clicked.connect(lambda: self.switch_source("vocals"))
         self.window.playButton.clicked.connect(self.toggle_play)
 
         for player in self.players:
             player.positionChanged.connect(
-                lambda position, p=player:
-                self.position_changed_from(p, position)
+                lambda position, p=player: self.position_changed_from(p, position)
             )
             player.durationChanged.connect(
-                lambda duration, p=player:
-                self.duration_changed_from(p, duration)
+                lambda duration, p=player: self.duration_changed_from(p, duration)
             )
             player.playbackStateChanged.connect(
-                lambda state, p=player:
-                self.playback_state_changed_from(p, state)
+                lambda state, p=player: self.playback_state_changed_from(p, state)
             )
             player.mediaStatusChanged.connect(
-                lambda status, p=player:
-                self.media_status_changed_from(p, status)
+                lambda status, p=player: self.media_status_changed_from(p, status)
             )
 
-        self.window.positionSlider.sliderMoved.connect(
-            self.seek_active_player
-        )
-        self.waveform.seekRequested.connect(
-            self.seek_active_player
-        )
-
+        self.window.positionSlider.sliderMoved.connect(self.seek_active_player)
+        self.waveform.seekRequested.connect(self.seek_active_player)
         self.window.saveButton.clicked.connect(self.save_current)
         self.window.saveNextButton.clicked.connect(self.save_next)
 
-        self.window.runQcModeButton.clicked.connect(
-            lambda: self.set_mode("run")
-        )
-        self.window.blindModeButton.clicked.connect(
-            lambda: self.set_mode("blind")
-        )
+        self.window.runQcModeButton.clicked.connect(lambda: self.set_mode("run"))
+        self.window.blindModeButton.clicked.connect(lambda: self.set_mode("blind_vocal"))
+        self.window.blindBassModeButton.clicked.connect(lambda: self.set_mode("blind_bass"))
+        self.window.blindDrumsModeButton.clicked.connect(lambda: self.set_mode("blind_drums"))
+        self.window.blindOtherModeButton.clicked.connect(lambda: self.set_mode("blind_other"))
 
-        for label, button in {
+        for label, button in self.candidate_buttons().items():
+            button.clicked.connect(
+                lambda checked=False, candidate=label: self.switch_candidate(candidate)
+            )
+
+        self.window.revealButton.clicked.connect(self.reveal_models)
+        self.window.runComboBox.currentIndexChanged.connect(self.run_selection_changed)
+
+    def candidate_buttons(self):
+        return {
             "A": self.window.candidateAButton,
             "B": self.window.candidateBButton,
             "C": self.window.candidateCButton,
             "D": self.window.candidateDButton,
             "E": self.window.candidateEButton,
-        }.items():
-            button.clicked.connect(
-                lambda checked=False, candidate=label:
-                self.switch_candidate(candidate)
-            )
+        }
 
-        self.window.revealButton.clicked.connect(self.reveal_models)
+    def update_candidate_buttons(self):
+        buttons = self.candidate_buttons()
+        available = set(self.blind_sources)
 
-        self.window.runComboBox.currentIndexChanged.connect(
-            self.run_selection_changed
-        )
+        for label, button in buttons.items():
+            present = label in available
+            button.setVisible(present)
+            button.setEnabled(present)
+            button.setText(label)
+            if not present:
+                button.setChecked(False)
+                button.setToolTip("")
 
-
-    def discover_blind_packs(self):
+    def discover_blind_packs(self, kind=None):
         if not LISTENING_DIR.is_dir():
             return []
 
+        kind = kind or self.blind_kind
+        token = f"-{self.blind_stem(kind)}-blind-"
         packs = []
 
         for directory in LISTENING_DIR.iterdir():
-            if not directory.is_dir():
+            if not directory.is_dir() or token not in directory.name:
                 continue
-
-            wavs = [
-                directory / f"{label}.wav"
-                for label in "ABCDE"
-            ]
 
             score_file = directory / "scores.json"
             mapping_file = directory / "mapping.secret.json"
+            if not (score_file.is_file() and mapping_file.is_file()):
+                continue
 
-            # Only show directories that look like real Blind Vocal packs.
-            if (
-                all(path.is_file() for path in wavs)
-                and score_file.is_file()
-                and mapping_file.is_file()
-            ):
+            try:
+                mapping = json.loads(mapping_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+
+            labels = sorted(
+                label for label in mapping
+                if len(label) == 1 and label.isalpha() and label.isupper()
+            )
+
+            if len(labels) < 2:
+                continue
+
+            if all((directory / f"{label}.wav").is_file() for label in labels):
                 packs.append(directory)
 
-        packs.sort(
-            key=lambda path: path.name
-        )
-
+        packs.sort(key=lambda path: path.name)
         return packs
 
-
     def setup_blind_pack_selector(self):
-        self.window.blindModeButton.setText("BLIND VOCAL")
-
-        self.blindPackLabel = QLabel(
-            "Blind Pack",
-            self.window.blindSourceGroup,
-        )
-
-        self.blindPackComboBox = QComboBox(
-            self.window.blindSourceGroup
-        )
-
-        self.blindPackComboBox.setMinimumWidth(280)
-
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 8)
-        row.addWidget(self.blindPackLabel)
-        row.addWidget(self.blindPackComboBox, 1)
-
+        self.blindPackLabel = QLabel("Blind Packs", self.window.blindSourceGroup)
         group_layout = self.window.blindSourceGroup.layout()
-
         if group_layout is None:
-            group_layout = QVBoxLayout(
-                self.window.blindSourceGroup
+            group_layout = QVBoxLayout(self.window.blindSourceGroup)
+
+        self.blindPackLayout = QHBoxLayout()
+        self.blindPackLayout.setSpacing(14)
+
+        selector_row = QVBoxLayout()
+        selector_row.setContentsMargins(0, 0, 0, 10)
+        selector_row.addWidget(self.blindPackLabel)
+        selector_row.addLayout(self.blindPackLayout)
+        group_layout.insertLayout(0, selector_row)
+        group_layout.setSpacing(10)
+        self.window.blindSourceGroup.setMinimumHeight(190)
+        self.window.blindSourceGroup.setMaximumHeight(210)
+        self.blindPackLabel.setMinimumHeight(20)
+        for button in self.candidate_buttons().values():
+            button.setMinimumHeight(34)
+        self.window.blindStatusLabel.setMinimumHeight(20)
+
+        self.blindPackChecks = []
+        self.refresh_blind_pack_selector()
+
+    def refresh_blind_pack_selector(self):
+        while self.blindPackLayout.count():
+            item = self.blindPackLayout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self.blindPackChecks = []
+        packs = self.discover_blind_packs(self.blind_kind)
+
+        if self.blind_pack_dir not in packs:
+            self.blind_pack_dir = packs[-1] if packs else None
+
+        for pack in packs:
+            label = pack.name
+            label = label.replace("-vocals-blind-01", "")
+            label = label.replace("-vocals-blind-02", "")
+            label = label.replace("-bass-blind-01", "")
+            label = label.replace("-bass-blind-02", "")
+            label = label.replace("-drums-blind-01", "")
+            label = label.replace("-drums-blind-02", "")
+            label = label.replace("-other-blind-01", "")
+            label = label.replace("-other-blind-02", "")
+            label = label.replace("control-", "Control ")
+
+            checkbox = QRadioButton(label)
+            checkbox.setMinimumHeight(28)
+            checkbox.setAutoExclusive(False)
+            checkbox.setProperty("blindPackPath", str(pack))
+            checkbox.setToolTip(pack.name)
+            checkbox.toggled.connect(
+                lambda checked, cb=checkbox: self.blind_pack_checkbox_toggled(cb, checked)
             )
-
-        # Put selector above A/B/C/D/E.
-        group_layout.insertLayout(0, row)
-
-        packs = self.discover_blind_packs()
-
-        self.blindPackComboBox.blockSignals(True)
-        self.blindPackComboBox.clear()
-
-        selected_index = -1
-
-        for index, pack in enumerate(packs):
-            self.blindPackComboBox.addItem(
-                pack.name,
-                str(pack),
-            )
+            self.blindPackChecks.append(checkbox)
+            self.blindPackLayout.addWidget(checkbox)
 
             if pack == self.blind_pack_dir:
-                selected_index = index
+                checkbox.blockSignals(True)
+                checkbox.setChecked(True)
+                checkbox.blockSignals(False)
 
-        if packs:
-            if selected_index < 0:
-                # Prefer newest control numerically/name-wise when the
-                # previous default pack does not exist.
-                selected_index = len(packs) - 1
-                self.blind_pack_dir = packs[selected_index]
+        self.blindPackLayout.addStretch()
 
-            self.blindPackComboBox.setCurrentIndex(
-                selected_index
-            )
-        else:
-            self.blindPackComboBox.addItem(
-                "No blind packs found",
-                None,
-            )
-            self.blindPackComboBox.setEnabled(False)
-
-        self.blindPackComboBox.blockSignals(False)
-
-        self.blindPackComboBox.currentIndexChanged.connect(
-            self.blind_pack_changed
-        )
-
-
-    def blind_pack_changed(self, index):
-        if index < 0:
+    def blind_pack_checkbox_toggled(
+        self,
+        checkbox,
+        checked,
+    ):
+        if not checked:
+            # Never allow zero selected packs.
+            if not any(
+                cb.isChecked()
+                for cb in self.blindPackChecks
+                if cb is not checkbox
+            ):
+                checkbox.blockSignals(True)
+                checkbox.setChecked(True)
+                checkbox.blockSignals(False)
             return
 
-        value = self.blindPackComboBox.itemData(index)
+        value = checkbox.property(
+            "blindPackPath"
+        )
 
         if not value:
             return
 
         new_pack = Path(value)
 
+        # Enforce single-selection behavior.
+        for other in self.blindPackChecks:
+            if other is checkbox:
+                continue
+
+            other.blockSignals(True)
+            other.setChecked(False)
+            other.blockSignals(False)
+
         if new_pack == self.blind_pack_dir:
             return
 
-        # Save the currently displayed candidate into the OLD pack
-        # before changing directories.
         if (
-            self.mode == "blind"
+            self.mode in ("blind_vocal", "blind_bass", "blind_drums", "blind_other")
             and self.current_candidate is not None
         ):
             self.store_blind_score()
             self.write_blind_scores()
 
-        # Stop playback and clear waveform before swapping pack.
         self.reset_media_for_run_change()
 
         self.blind_pack_dir = new_pack
+        self.window.experimentLabel.setText(
+            f"BLIND {self.blind_kind.upper()} / {new_pack.name}"
+        )
         self.current_candidate = None
         self.blind_revealed = False
 
         self.load_blind_pack()
 
         if self.blind_sources:
-            first = sorted(self.blind_sources)[0]
-            self.switch_candidate(first)
+            first = sorted(
+                self.blind_sources
+            )[0]
+
+            self.switch_candidate(
+                first
+            )
 
         self.window.statusbar.showMessage(
-            f"Loaded Blind Vocal pack: {new_pack.name}",
+            f"Loaded Blind {self.blind_kind.title()} pack: {new_pack.name}",
             5000,
         )
 
 
+
+    @staticmethod
+    def blind_stem(kind):
+        return {"vocal": "vocals", "bass": "bass", "drums": "drums", "other": "other"}[kind]
+
+    def blind_criteria(self):
+        if self.blind_kind == "drums":
+            return [
+                ("drum_isolation", "Drum isolation", "less melodic / vocal / non-drum bleed"),
+                ("transient_integrity", "Snare integrity", "snare punch, attack and reverb tail preserved"),
+                ("cymbal_integrity", "Hats / cymbals", "natural highs and decay; no watery artifacts"),
+                ("kick_integrity", "Kick integrity", "kick sub weight, body, punch and decay preserved"),
+                ("remix_usability", "Remix usability", "usable in a real remix"),
+            ]
+        if self.blind_kind == "other":
+            return [
+                ("other_isolation", "Music isolation", "less vocal, drum and bass bleed"),
+                ("harmonic_integrity", "Harmonic integrity", "chords and melodic tone preserved"),
+                ("artifact_control", "Artifact control", "less warble and metallic artifacts"),
+                ("tail_integrity", "Reverb / tails", "natural ambience, reverb and sustained notes"),
+                ("remix_usability", "Remix usability", "usable in a real remix"),
+            ]
+        if self.blind_kind == "bass":
+            return [
+                ("bass_isolation", "Bass isolation", "less kick / mix bleed"),
+                ("bass_integrity", "Bass integrity", "tone and envelope intact"),
+                ("low_end_stability", "Low-end stability", "stable sub / no phase holes"),
+                ("note_definition", "Note definition", "attacks and notes stay clear"),
+                ("remix_usability", "Remix usability", "usable in a real remix"),
+            ]
+        return [
+            ("vocal_isolation", "Vocal isolation", "less instrumental bleed"),
+            ("vocal_integrity", "Vocal integrity", "natural / intact vocal"),
+            ("artifact_control", "Artifact control", "less warble / metallic damage"),
+            ("low_level_detail", "Low-level detail", "breaths / consonants / tails"),
+            ("remix_usability", "Remix usability", "usable in a real remix"),
+        ]
+
+    def update_blind_score_ui(self):
+        title = f"Blind {self.blind_kind} score"
+        self.window.blindQcGroup.setTitle(title)
+        self.window.blindNotesEdit.setPlaceholderText(
+            f"Optional {self.blind_kind} listening notes…"
+        )
+        for row, (_, label, help_text) in enumerate(self.blind_criteria(), start=1):
+            getattr(self.window, f"scoreLabel{row}").setText(label)
+            getattr(self.window, f"scoreHelp{row}").setText(help_text)
+            getattr(self.window, f"scoreLabel{row}").setToolTip(help_text)
+            for value in range(1, 6):
+                getattr(self.window, f"score{row}_{value}").setToolTip(
+                    f"{label}: {value}/5 — {help_text}"
+                )
+
     def set_mode(self, mode):
-        if mode not in ("run", "blind"):
+        if mode not in ("run", "blind_vocal", "blind_bass", "blind_drums", "blind_other"):
             return
 
-        if self.mode == "blind" and mode != "blind":
+        leaving_blind = self.mode in ("blind_vocal", "blind_bass", "blind_drums", "blind_other")
+        if leaving_blind and mode != self.mode:
             self.store_blind_score()
             self.write_blind_scores()
         elif self.mode == "run" and mode != "run":
             self.store_current_qc()
 
+        if mode != self.mode:
+            self.reset_media_for_run_change()
         self.mode = mode
         is_run = mode == "run"
 
         self.window.runQcModeButton.setChecked(is_run)
-        self.window.blindModeButton.setChecked(not is_run)
+        self.window.blindModeButton.setChecked(mode == "blind_vocal")
+        self.window.blindBassModeButton.setChecked(mode == "blind_bass")
+        self.window.blindDrumsModeButton.setChecked(mode == "blind_drums")
+        self.window.blindOtherModeButton.setChecked(mode == "blind_other")
 
         for widget in [
             self.window.runLabel,
             self.window.runComboBox,
-            self.window.sourceGroup,
             self.window.qcGroup,
             self.window.overallLabel,
             self.window.usableRadio,
@@ -400,6 +494,12 @@ class QCApp:
         ]:
             widget.setVisible(is_run)
 
+        self.window.sourceGroup.setVisible(True)
+        for button in (self.window.reconButton, self.window.bassButton, self.window.drumsButton, self.window.otherButton, self.window.vocalsButton):
+            button.setVisible(is_run)
+        self.window.mixButton.setEnabled(is_run or self.blind_original_path() is not None)
+        self.window.currentStemCaption.setVisible(is_run)
+        self.window.currentStemLabel.setVisible(is_run)
         self.window.blindSourceGroup.setVisible(not is_run)
         self.window.blindQcGroup.setVisible(not is_run)
         self.window.revealButton.setVisible(not is_run)
@@ -407,37 +507,34 @@ class QCApp:
         if is_run:
             self.window.saveButton.setText("SAVE")
             self.window.saveNextButton.setText("SAVE + NEXT")
-
             if self.result is not None:
-                experiment = self.result.get(
-                    "experiment",
-                    self.result.get("run_id", "run"),
-                )
-                model_name = self.result.get("model", {}).get(
-                    "name",
-                    "unknown",
-                )
-                self.window.experimentLabel.setText(
-                    f"{experiment} / {model_name}"
-                )
+                experiment = self.result.get("experiment", self.result.get("run_id", "run"))
+                model_name = self.result.get("model", {}).get("name", "unknown")
+                self.window.experimentLabel.setText(f"{experiment} / {model_name}")
                 self.switch_source(self.current_source)
-        else:
-            self.window.saveButton.setText("SAVE SCORE")
-            self.window.saveNextButton.setText("SAVE + NEXT")
-            self.window.experimentLabel.setText(
-                f"BLIND VOCAL / {self.blind_pack_dir.name}"
+            return
+
+        self.blind_kind = mode.removeprefix("blind_")
+        self.refresh_blind_pack_selector()
+        self.update_blind_score_ui()
+        self.current_candidate = None
+        self.load_blind_pack()
+
+        self.window.saveButton.setText("SAVE SCORE")
+        self.window.saveNextButton.setText("SAVE + NEXT")
+        kind_label = self.blind_kind.upper()
+        pack_label = self.blind_pack_dir.name if self.blind_pack_dir else "NO PACK"
+        self.window.experimentLabel.setText(f"BLIND {kind_label} / {pack_label}")
+
+        if not self.blind_sources:
+            self.window.currentStemLabel.setText("NO BLIND PACK")
+            self.window.statusbar.showMessage(
+                f"No Blind {kind_label.title()} pack found. Expected data/listening/*-{self.blind_stem(self.blind_kind)}-blind-*",
+                7000,
             )
+            return
 
-            if not self.blind_sources:
-                self.window.currentStemLabel.setText("NO BLIND PACK")
-                self.window.statusbar.showMessage(
-                    f"Blind pack not found: {self.blind_pack_dir}",
-                    7000,
-                )
-                return
-
-            candidate = self.current_candidate or sorted(self.blind_sources)[0]
-            self.switch_candidate(candidate)
+        self.switch_candidate(sorted(self.blind_sources)[0])
 
     def load_blind_pack(self):
         self.blind_sources = {}
@@ -445,13 +542,18 @@ class QCApp:
         self.blind_mapping = {}
         self.blind_revealed = False
 
-        if not self.blind_pack_dir.is_dir():
+        if not self.blind_pack_dir or not self.blind_pack_dir.is_dir():
+            self.update_candidate_buttons()
+            self.restore_blind_score()
+            self.update_blind_status()
             return
 
-        for label in "ABCDE":
+        for label in self.candidate_buttons():
             path = self.blind_pack_dir / f"{label}.wav"
             if path.is_file():
                 self.blind_sources[label] = path
+
+        self.update_candidate_buttons()
 
         score_file = self.blind_pack_dir / "scores.json"
         if score_file.is_file():
@@ -461,138 +563,114 @@ class QCApp:
             except Exception:
                 self.blind_scores = {}
 
+        keys = [key for key, _, _ in self.blind_criteria()]
         for label in self.blind_sources:
-            self.blind_scores.setdefault(
-                label,
-                {
-                    "vocal_isolation": None,
-                    "vocal_integrity": None,
-                    "artifact_control": None,
-                    "low_level_detail": None,
-                    "remix_usability": None,
-                    "notes": "",
-                },
-            )
+            row = self.blind_scores.setdefault(label, {})
+            for key in keys:
+                row.setdefault(key, None)
+            row.setdefault("notes", "")
 
         mapping_file = self.blind_pack_dir / "mapping.secret.json"
         if mapping_file.is_file():
             try:
-                self.blind_mapping = json.loads(
-                    mapping_file.read_text(encoding="utf-8")
-                )
+                self.blind_mapping = json.loads(mapping_file.read_text(encoding="utf-8"))
             except Exception:
                 self.blind_mapping = {}
 
         self.update_blind_status()
 
+    def setup_blind_score_radios(self):
+        self.blindScoreRadios = []
+        for row in range(1, 6):
+            group = QButtonGroup(self.window)
+            group.setExclusive(True)
+            buttons = {}
+            for value in range(1, 6):
+                button = getattr(self.window, f"score{row}_{value}")
+                group.addButton(button, value)
+                buttons[value] = button
+            self.blindScoreRadios.append({"group": group, "buttons": buttons})
+
+    def blind_radio_value(self, row_index):
+        checked = self.blindScoreRadios[row_index]["group"].checkedId()
+        return checked if checked in (1, 2, 3, 4, 5) else None
+
+    def set_blind_radio_value(self, row_index, value):
+        entry = self.blindScoreRadios[row_index]
+        group = entry["group"]
+        group.setExclusive(False)
+        for button in entry["buttons"].values():
+            button.setChecked(False)
+        group.setExclusive(True)
+        if value in (1, 2, 3, 4, 5):
+            entry["buttons"][value].setChecked(True)
+
     def store_blind_score(self):
         if not self.current_candidate:
             return
-
         row = self.blind_scores.setdefault(self.current_candidate, {})
-
-        values = {
-            "vocal_isolation": self.window.isolationSpin.value(),
-            "vocal_integrity": self.window.integritySpin.value(),
-            "artifact_control": self.window.artifactSpin.value(),
-            "low_level_detail": self.window.detailSpin.value(),
-            "remix_usability": self.window.remixSpin.value(),
-        }
-
-        for key, value in values.items():
-            row[key] = value if value > 0 else None
-
+        for index, (key, _, _) in enumerate(self.blind_criteria()):
+            row[key] = self.blind_radio_value(index)
         row["notes"] = self.window.blindNotesEdit.toPlainText().strip()
 
     def restore_blind_score(self):
         row = self.blind_scores.get(self.current_candidate, {})
-
-        mapping = {
-            "vocal_isolation": self.window.isolationSpin,
-            "vocal_integrity": self.window.integritySpin,
-            "artifact_control": self.window.artifactSpin,
-            "low_level_detail": self.window.detailSpin,
-            "remix_usability": self.window.remixSpin,
-        }
-
-        for key, spin in mapping.items():
-            value = row.get(key)
-            spin.setValue(int(value) if value is not None else 0)
-
+        for index, (key, _, _) in enumerate(self.blind_criteria()):
+            self.set_blind_radio_value(index, row.get(key))
         self.window.blindNotesEdit.setPlainText(row.get("notes", ""))
 
     def write_blind_scores(self):
-        if not self.blind_pack_dir.is_dir():
+        if not self.blind_pack_dir or not self.blind_pack_dir.is_dir():
             return
 
         score_file = self.blind_pack_dir / "scores.json"
         payload = {}
-
         if score_file.is_file():
             try:
                 payload = json.loads(score_file.read_text(encoding="utf-8"))
             except Exception:
                 payload = {}
 
-        payload.setdefault(
-            "instructions",
-            {
-                "scale": "1-5; higher is better",
-                "do_not_open_mapping_until_finished": True,
-            },
-        )
+        payload["control"] = payload.get("control", self.blind_pack_dir.name.split("-")[0] + "-" + self.blind_pack_dir.name.split("-")[1] if self.blind_pack_dir.name.startswith("control-") else self.blind_pack_dir.name)
+        payload["blind_type"] = self.blind_kind
+        payload["instructions"] = {
+            "scale": "1-5; higher is better",
+            "anchors": {"1": "Poor", "3": "Acceptable", "5": "Excellent"},
+            "do_not_open_mapping_until_finished": True,
+        }
+        payload["criteria"] = {
+            key: help_text for key, _, help_text in self.blind_criteria()
+        }
         payload["scores"] = self.blind_scores
 
-        score_file.write_text(
-            json.dumps(payload, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
+        score_file.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         self.update_blind_status()
 
     def blind_complete(self):
-        required = (
-            "vocal_isolation",
-            "vocal_integrity",
-            "artifact_control",
-            "low_level_detail",
-            "remix_usability",
-        )
-
+        required = [key for key, _, _ in self.blind_criteria()]
         if not self.blind_sources:
             return False
-
         for label in self.blind_sources:
             row = self.blind_scores.get(label, {})
             if any(row.get(key) not in (1, 2, 3, 4, 5) for key in required):
                 return False
-
         return True
 
     def update_blind_status(self):
         total = len(self.blind_sources)
         completed = 0
-
-        required = (
-            "vocal_isolation",
-            "vocal_integrity",
-            "artifact_control",
-            "low_level_detail",
-            "remix_usability",
-        )
+        required = [key for key, _, _ in self.blind_criteria()]
 
         for label in self.blind_sources:
             row = self.blind_scores.get(label, {})
             if all(row.get(key) in (1, 2, 3, 4, 5) for key in required):
                 completed += 1
 
-        pack_name = self.blind_pack_dir.name
-
+        pack_name = self.blind_pack_dir.name if self.blind_pack_dir else "no-pack"
+        kind = "Bass" if self.blind_kind == "bass" else "Vocal"
+        reveal = "Models revealed" if self.blind_revealed else "Models hidden"
         self.window.blindStatusLabel.setText(
-            f"{pack_name}  •  Scored {completed}/{total}  •  Models hidden"
-            if not self.blind_revealed
-            else
-            f"{pack_name}  •  Scored {completed}/{total}  •  Models revealed"
+            f"Scored {completed}/{total}  •  {reveal}"
         )
         self.window.revealButton.setEnabled(self.blind_complete())
 
@@ -611,14 +689,7 @@ class QCApp:
 
         self.current_candidate = candidate
 
-        button_map = {
-            "A": self.window.candidateAButton,
-            "B": self.window.candidateBButton,
-            "C": self.window.candidateCButton,
-            "D": self.window.candidateDButton,
-            "E": self.window.candidateEButton,
-        }
-        button_map[candidate].setChecked(True)
+        self.candidate_buttons()[candidate].setChecked(True)
 
         label = f"CANDIDATE {candidate}"
         if self.blind_revealed:
@@ -643,7 +714,7 @@ class QCApp:
         self.update_blind_status()
 
     def save_current(self):
-        if self.mode == "blind":
+        if self.mode in ("blind_vocal", "blind_bass", "blind_drums", "blind_other"):
             self.store_blind_score()
             self.write_blind_scores()
             self.window.statusbar.showMessage(
@@ -654,7 +725,7 @@ class QCApp:
             self.save_qc()
 
     def save_next(self):
-        if self.mode != "blind":
+        if self.mode not in ("blind_vocal", "blind_bass", "blind_drums", "blind_other"):
             self.save_qc()
             return
 
@@ -706,13 +777,7 @@ class QCApp:
             runtime_text = f"{runtime:.2f}s" if isinstance(runtime, (int, float)) else "-"
             lines.append(f"{label}  {model}  [{preset}]  {runtime_text}")
 
-            button = {
-                "A": self.window.candidateAButton,
-                "B": self.window.candidateBButton,
-                "C": self.window.candidateCButton,
-                "D": self.window.candidateDButton,
-                "E": self.window.candidateEButton,
-            }[label]
+            button = self.candidate_buttons()[label]
             button.setToolTip(model)
 
         if self.current_candidate:
@@ -1027,6 +1092,47 @@ class QCApp:
         self.window.notesEdit.setPlainText(
             data.get("note", "")
         )
+
+    def blind_original_path(self):
+        if not self.blind_pack_dir:
+            return None
+        try:
+            payload = json.loads((self.blind_pack_dir / "scores.json").read_text(encoding="utf-8"))
+            control = payload["control"]
+        except (OSError, ValueError, KeyError):
+            return None
+        originals = set()
+        for result_file in RESULTS_DIR.rglob("result.json"):
+            try:
+                data = json.loads(result_file.read_text(encoding="utf-8"))
+                experiment = str(data.get("experiment", ""))
+                run_id = str(data.get("run_id", ""))
+                if not (experiment.startswith(control + "-") or f"-{control}-" in run_id):
+                    continue
+                path = Path(data["input"]["path"])
+                if not path.is_absolute():
+                    path = ROOT / path
+                if path.is_file():
+                    originals.add(path.resolve())
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+        return next(iter(originals)) if len(originals) == 1 else None
+
+    def select_original_source(self):
+        if self.mode == "run":
+            self.switch_source("mix")
+            return
+        path = self.blind_original_path()
+        if path is None:
+            self.window.statusbar.showMessage("Original source unavailable or ambiguous", 6000)
+            return
+        self.store_blind_score()
+        position = self.player.position()
+        playing = self.player.playbackState() == QMediaPlayer.PlayingState
+        self.window.mixButton.setChecked(True)
+        self.window.currentStemLabel.setText("SOURCE / ORIGINAL MIX (NOT RATED)")
+        self.waveform.load_wav(path)
+        self.start_source_transition(path, position, playing)
 
     def switch_source(self, source):
         if source not in self.sources:

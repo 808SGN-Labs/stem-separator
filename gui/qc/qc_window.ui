@@ -1,4 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>QCWindow</class>
  <widget class="QMainWindow" name="QCWindow">
@@ -21,33 +20,35 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="mainLayout">
-    <property name="spacing">
-     <number>16</number>
-    </property>
-    <property name="leftMargin">
-     <number>24</number>
-    </property>
-    <property name="topMargin">
-     <number>20</number>
-    </property>
-    <property name="rightMargin">
-     <number>24</number>
-    </property>
-    <property name="bottomMargin">
-     <number>20</number>
-    </property>
     <item>
      <layout class="QHBoxLayout" name="headerLayout">
       <item>
        <widget class="QLabel" name="titleLabel">
-        <property name="styleSheet">
-         <string>font-size: 22px; font-weight: 700;</string>
-        </property>
         <property name="text">
-         <string>STEMLAB QC</string>
+         <string>STEMLAB / LISTENING DESK</string>
+        </property>
+        <property name="styleSheet">
+         <string>font-size: 20px; font-weight: 700; color: #eef1f5;</string>
         </property>
        </widget>
       </item>
+      <item>
+       <spacer name="headerSpacer">
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="contextLayout">
       <item>
        <widget class="QLabel" name="runLabel">
         <property name="text">
@@ -66,25 +67,15 @@
        </widget>
       </item>
       <item>
-       <spacer name="headerSpacer">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
        <widget class="QLabel" name="experimentLabel">
         <property name="text">
          <string>CONTROL-01 / HTDemucs</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
@@ -112,7 +103,27 @@
        <item>
         <widget class="QPushButton" name="blindModeButton">
          <property name="text">
-          <string>BLIND COMPARE</string>
+          <string>BLIND VOCAL</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="blindBassModeButton">
+         <property name="text">
+          <string>BLIND BASS</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="blindDrumsModeButton">
+         <property name="text">
+          <string>BLIND DRUMS</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -132,412 +143,1308 @@
          </property>
         </spacer>
        </item>
+       <property name="leftMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>12</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
       </layout>
      </widget>
     </item>
+    <property name="spacing">
+     <number>12</number>
+    </property>
+    <property name="leftMargin">
+     <number>20</number>
+    </property>
+    <property name="rightMargin">
+     <number>20</number>
+    </property>
+    <property name="topMargin">
+     <number>16</number>
+    </property>
+    <property name="bottomMargin">
+     <number>12</number>
+    </property>
     <item>
-     <widget class="QGroupBox" name="sourceGroup">
-      <property name="title">
-       <string>Source</string>
-      </property>
-      <layout class="QHBoxLayout" name="sourceLayout">
-       <item>
-        <widget class="QPushButton" name="mixButton">
-         <property name="maximumSize">
-          <size>
-           <width>16777195</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>1  SOURCE</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="reconButton">
-         <property name="text">
-          <string>2 RECON</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="bassButton">
-         <property name="text">
-          <string>3  BASS</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="drumsButton">
-         <property name="text">
-          <string>4  DRUMS</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="otherButton">
-         <property name="text">
-          <string>5  OTHER</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="vocalsButton">
-         <property name="text">
-          <string>6  VOCALS</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item>
-     <widget class="QGroupBox" name="blindSourceGroup">
-      <property name="title">
-       <string>Blind candidates</string>
-      </property>
-      <layout class="QHBoxLayout" name="blindSourceLayout">
-       <item><widget class="QPushButton" name="candidateAButton"><property name="text"><string>A</string></property><property name="checkable"><bool>true</bool></property></widget></item>
-       <item><widget class="QPushButton" name="candidateBButton"><property name="text"><string>B</string></property><property name="checkable"><bool>true</bool></property></widget></item>
-       <item><widget class="QPushButton" name="candidateCButton"><property name="text"><string>C</string></property><property name="checkable"><bool>true</bool></property></widget></item>
-       <item><widget class="QPushButton" name="candidateDButton"><property name="text"><string>D</string></property><property name="checkable"><bool>true</bool></property></widget></item>
-       <item><widget class="QPushButton" name="candidateEButton"><property name="text"><string>E</string></property><property name="checkable"><bool>true</bool></property></widget></item>
-       <item>
-        <spacer name="blindCandidateSpacer">
-         <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
-         <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QLabel" name="blindStatusLabel">
-         <property name="text"><string>Scored 0/5  •  Models hidden</string></property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item>
-     <widget class="QWidget" name="waveformPlaceholder" native="true">
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>150</height>
-       </size>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QGroupBox" name="transportGroup">
-      <property name="title">
-       <string>Audition</string>
-      </property>
-      <layout class="QVBoxLayout" name="transportOuterLayout">
-       <item>
-        <layout class="QHBoxLayout" name="timelineLayout">
-         <item>
-          <widget class="QLabel" name="currentTimeLabel">
-           <property name="text">
-            <string>00:00</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QSlider" name="positionSlider">
-           <property name="maximum">
-            <number>30000</number>
-           </property>
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="durationLabel">
-           <property name="text">
-            <string>00:30</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="transportLayout">
-         <item>
-          <spacer name="transportLeftSpacer">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="playButton">
-           <property name="minimumSize">
-            <size>
-             <width>90</width>
-             <height>38</height>
-            </size>
-           </property>
-           <property name="text">
-            <string>▶  PLAY</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="loopCheckBox">
-           <property name="text">
-            <string>Loop</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="transportRightSpacer">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item>
-     <layout class="QHBoxLayout" name="currentStemLayout">
+     <layout class="QHBoxLayout" name="workspaceLayout" stretch="5,4">
       <item>
-       <widget class="QLabel" name="currentStemCaption">
-        <property name="text">
-         <string>Current:</string>
+       <layout class="QVBoxLayout" name="auditionColumn">
+        <property name="spacing">
+         <number>12</number>
         </property>
-       </widget>
+        <item>
+         <widget class="QGroupBox" name="sourceGroup">
+          <property name="title">
+           <string>Source</string>
+          </property>
+          <layout class="QHBoxLayout" name="sourceLayout">
+           <item>
+            <widget class="QPushButton" name="mixButton">
+             <property name="maximumSize">
+              <size>
+               <width>16777195</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>1  SOURCE</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="reconButton">
+             <property name="text">
+              <string>2 RECON</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="bassButton">
+             <property name="text">
+              <string>3  BASS</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="drumsButton">
+             <property name="text">
+              <string>4  DRUMS</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="otherButton">
+             <property name="text">
+              <string>5  OTHER</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="vocalsButton">
+             <property name="text">
+              <string>6  VOCALS</string>
+             </property>
+             <property name="checkable">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="blindSourceGroup">
+          <property name="title">
+           <string>Blind candidates</string>
+          </property>
+          <layout class="QVBoxLayout" name="blindSourceLayout">
+           <item>
+            <layout class="QHBoxLayout" name="candidateRowLayout">
+             <item>
+              <widget class="QPushButton" name="candidateAButton">
+               <property name="text">
+                <string>A</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="candidateBButton">
+               <property name="text">
+                <string>B</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="candidateCButton">
+               <property name="text">
+                <string>C</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="candidateDButton">
+               <property name="text">
+                <string>D</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="candidateEButton">
+               <property name="text">
+                <string>E</string>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="blindCandidateSpacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="blindStatusLabel">
+             <property name="text">
+              <string>Scored 0/5  •  Models hidden</string>
+             </property>
+             <property name="wordWrap">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="currentStemLayout">
+          <item>
+           <widget class="QLabel" name="currentStemCaption">
+            <property name="text">
+             <string>Current:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="currentStemLabel">
+            <property name="styleSheet">
+             <string>font-size: 18px; font-weight: 700;</string>
+            </property>
+            <property name="text">
+             <string>MIX</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="currentStemSpacer">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QWidget" name="waveformPlaceholder" native="true">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>150</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="transportGroup">
+          <property name="title">
+           <string>Audition</string>
+          </property>
+          <layout class="QVBoxLayout" name="transportOuterLayout">
+           <item>
+            <layout class="QHBoxLayout" name="timelineLayout">
+             <item>
+              <widget class="QLabel" name="currentTimeLabel">
+               <property name="text">
+                <string>00:00</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="positionSlider">
+               <property name="maximum">
+                <number>30000</number>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="durationLabel">
+               <property name="text">
+                <string>00:30</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="transportLayout">
+             <item>
+              <spacer name="transportLeftSpacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="playButton">
+               <property name="minimumSize">
+                <size>
+                 <width>90</width>
+                 <height>38</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>▶  PLAY</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="loopCheckBox">
+               <property name="text">
+                <string>Loop</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="transportRightSpacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item>
-       <widget class="QLabel" name="currentStemLabel">
-        <property name="styleSheet">
-         <string>font-size: 18px; font-weight: 700;</string>
+       <layout class="QVBoxLayout" name="evaluationColumn">
+        <property name="spacing">
+         <number>12</number>
         </property>
-        <property name="text">
-         <string>MIX</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="currentStemSpacer">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
+        <item>
+         <widget class="QGroupBox" name="qcGroup">
+          <property name="title">
+           <string>Human QC</string>
+          </property>
+          <layout class="QVBoxLayout" name="qcLayout">
+           <item>
+            <layout class="QHBoxLayout" name="usabilityLayout">
+             <item>
+              <widget class="QLabel" name="usabilityLabel">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Usability</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QRadioButton" name="goodRadio">
+               <property name="text">
+                <string>Good</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QRadioButton" name="acceptableRadio">
+               <property name="text">
+                <string>Acceptable</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QRadioButton" name="poorRadio">
+               <property name="text">
+                <string>Poor</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="usabilitySpacer">
+               <property name="orientation">
+                <enum>Qt::Orientation::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QGridLayout" name="issuesLayout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="issuesLabel">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>Issues</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QCheckBox" name="leakageCheck">
+               <property name="text">
+                <string>Leakage</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QCheckBox" name="artifactsCheck">
+               <property name="text">
+                <string>Artifacts</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QCheckBox" name="missingCheck">
+               <property name="text">
+                <string>Missing source</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QCheckBox" name="transientsCheck">
+               <property name="text">
+                <string>Transients</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QCheckBox" name="lowEndCheck">
+               <property name="text">
+                <string>Low-end</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="3">
+              <widget class="QCheckBox" name="otherIssueCheck">
+               <property name="text">
+                <string>Other</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="notesLabel">
+             <property name="text">
+              <string>Notes</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPlainTextEdit" name="notesEdit">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>90</height>
+              </size>
+             </property>
+             <property name="placeholderText">
+              <string>What do you hear? Bleed, tone, transients…</string>
+             </property>
+             <property name="maximumHeight">
+              <number>140</number>
+             </property>
+            </widget>
+           </item>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+          </layout>
+         </widget>
+        </item>
+        <item>
+         <widget class="QGroupBox" name="blindQcGroup">
+          <property name="title">
+           <string>Blind vocal score</string>
+          </property>
+          <layout class="QVBoxLayout" name="blindQcLayout">
+           <property name="spacing">
+            <number>8</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="blindScaleLegend">
+             <property name="text">
+              <string>1 = Poor     3 = Acceptable     5 = Excellent</string>
+             </property>
+             <property name="styleSheet">
+              <string>color: #7f8791; font-size: 10px; padding: 0 0 4px 0;</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QGridLayout" name="blindScoreGrid">
+             <property name="horizontalSpacing">
+              <number>12</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>7</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QLabel" name="scoreLabel1">
+               <property name="text">
+                <string>Score 1</string>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>145</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QWidget" name="scoreRow1">
+               <layout class="QHBoxLayout" name="scoreRowLayout1">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <item>
+                 <widget class="QRadioButton" name="score1_1">
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>1/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score1_2">
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>2/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score1_3">
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>3/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score1_4">
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>4/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score1_5">
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>5/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="scoreSpacer1">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QLabel" name="scoreHelp1">
+               <property name="text">
+                <string />
+               </property>
+               <property name="styleSheet">
+                <string>color: #777f89; font-size: 10px;</string>
+               </property>
+               <property name="visible">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="scoreLabel2">
+               <property name="text">
+                <string>Score 2</string>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>145</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QWidget" name="scoreRow2">
+               <layout class="QHBoxLayout" name="scoreRowLayout2">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <item>
+                 <widget class="QRadioButton" name="score2_1">
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>1/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score2_2">
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>2/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score2_3">
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>3/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score2_4">
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>4/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score2_5">
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>5/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="scoreSpacer2">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QLabel" name="scoreHelp2">
+               <property name="text">
+                <string />
+               </property>
+               <property name="styleSheet">
+                <string>color: #777f89; font-size: 10px;</string>
+               </property>
+               <property name="visible">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QLabel" name="scoreLabel3">
+               <property name="text">
+                <string>Score 3</string>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>145</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QWidget" name="scoreRow3">
+               <layout class="QHBoxLayout" name="scoreRowLayout3">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <item>
+                 <widget class="QRadioButton" name="score3_1">
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>1/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score3_2">
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>2/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score3_3">
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>3/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score3_4">
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>4/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score3_5">
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>5/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="scoreSpacer3">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="2" column="2">
+              <widget class="QLabel" name="scoreHelp3">
+               <property name="text">
+                <string />
+               </property>
+               <property name="styleSheet">
+                <string>color: #777f89; font-size: 10px;</string>
+               </property>
+               <property name="visible">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="scoreLabel4">
+               <property name="text">
+                <string>Score 4</string>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>145</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="1">
+              <widget class="QWidget" name="scoreRow4">
+               <layout class="QHBoxLayout" name="scoreRowLayout4">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <item>
+                 <widget class="QRadioButton" name="score4_1">
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>1/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score4_2">
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>2/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score4_3">
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>3/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score4_4">
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>4/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score4_5">
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>5/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="scoreSpacer4">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="3" column="2">
+              <widget class="QLabel" name="scoreHelp4">
+               <property name="text">
+                <string />
+               </property>
+               <property name="styleSheet">
+                <string>color: #777f89; font-size: 10px;</string>
+               </property>
+               <property name="visible">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="0">
+              <widget class="QLabel" name="scoreLabel5">
+               <property name="text">
+                <string>Score 5</string>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>145</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="4" column="1">
+              <widget class="QWidget" name="scoreRow5">
+               <layout class="QHBoxLayout" name="scoreRowLayout5">
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <item>
+                 <widget class="QRadioButton" name="score5_1">
+                  <property name="text">
+                   <string>1</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>1/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score5_2">
+                  <property name="text">
+                   <string>2</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>2/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score5_3">
+                  <property name="text">
+                   <string>3</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>3/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score5_4">
+                  <property name="text">
+                   <string>4</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>4/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QRadioButton" name="score5_5">
+                  <property name="text">
+                   <string>5</string>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>28</width>
+                    <height>30</height>
+                   </size>
+                  </property>
+                  <property name="toolTip">
+                   <string>5/5</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="scoreSpacer5">
+                  <property name="orientation">
+                   <enum>Qt::Orientation::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="4" column="2">
+              <widget class="QLabel" name="scoreHelp5">
+               <property name="text">
+                <string />
+               </property>
+               <property name="styleSheet">
+                <string>color: #777f89; font-size: 10px;</string>
+               </property>
+               <property name="visible">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="blindNotesLabel">
+             <property name="text">
+              <string>Notes</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPlainTextEdit" name="blindNotesEdit">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>70</height>
+              </size>
+             </property>
+             <property name="placeholderText">
+              <string>What do you hear? Bleed, tone, transients…</string>
+             </property>
+             <property name="maximumHeight">
+              <number>140</number>
+             </property>
+            </widget>
+           </item>
+           <property name="leftMargin">
+            <number>12</number>
+           </property>
+           <property name="rightMargin">
+            <number>12</number>
+           </property>
+           <property name="topMargin">
+            <number>12</number>
+           </property>
+           <property name="bottomMargin">
+            <number>12</number>
+           </property>
+          </layout>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
-    </item>
-    <item>
-     <widget class="QGroupBox" name="qcGroup">
-      <property name="title">
-       <string>Human QC</string>
-      </property>
-      <layout class="QVBoxLayout" name="qcLayout">
-       <item>
-        <layout class="QHBoxLayout" name="usabilityLayout">
-         <item>
-          <widget class="QLabel" name="usabilityLabel">
-           <property name="minimumSize">
-            <size>
-             <width>100</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="text">
-            <string>Usability</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="goodRadio">
-           <property name="text">
-            <string>Good</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="acceptableRadio">
-           <property name="text">
-            <string>Acceptable</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="poorRadio">
-           <property name="text">
-            <string>Poor</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="usabilitySpacer">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QGridLayout" name="issuesLayout">
-         <item row="0" column="0">
-          <widget class="QLabel" name="issuesLabel">
-           <property name="minimumSize">
-            <size>
-             <width>100</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="text">
-            <string>Issues</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="1">
-          <widget class="QCheckBox" name="leakageCheck">
-           <property name="text">
-            <string>Leakage</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="2">
-          <widget class="QCheckBox" name="artifactsCheck">
-           <property name="text">
-            <string>Artifacts</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="3">
-          <widget class="QCheckBox" name="missingCheck">
-           <property name="text">
-            <string>Missing source</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QCheckBox" name="transientsCheck">
-           <property name="text">
-            <string>Transients</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QCheckBox" name="lowEndCheck">
-           <property name="text">
-            <string>Low-end</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="3">
-          <widget class="QCheckBox" name="otherIssueCheck">
-           <property name="text">
-            <string>Other</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="QLabel" name="notesLabel">
-         <property name="text">
-          <string>Notes</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPlainTextEdit" name="notesEdit">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>90</height>
-          </size>
-         </property>
-         <property name="placeholderText">
-          <string>Optional listening notes…</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item>
-     <widget class="QGroupBox" name="blindQcGroup">
-      <property name="title"><string>Blind vocal score</string></property>
-      <layout class="QVBoxLayout" name="blindQcLayout">
-       <item>
-        <layout class="QGridLayout" name="blindScoreGrid">
-         <item row="0" column="0"><widget class="QLabel" name="isolationLabel"><property name="text"><string>Vocal isolation</string></property></widget></item>
-         <item row="0" column="1"><widget class="QSpinBox" name="isolationSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
-         <item row="0" column="2"><widget class="QLabel" name="isolationHelp"><property name="text"><string>instrumental bleed</string></property></widget></item>
-         <item row="1" column="0"><widget class="QLabel" name="integrityLabel"><property name="text"><string>Vocal integrity</string></property></widget></item>
-         <item row="1" column="1"><widget class="QSpinBox" name="integritySpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
-         <item row="1" column="2"><widget class="QLabel" name="integrityHelp"><property name="text"><string>natural / intact vocal</string></property></widget></item>
-         <item row="2" column="0"><widget class="QLabel" name="artifactLabel"><property name="text"><string>Artifact control</string></property></widget></item>
-         <item row="2" column="1"><widget class="QSpinBox" name="artifactSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
-         <item row="2" column="2"><widget class="QLabel" name="artifactHelp"><property name="text"><string>warble / metallic / phase damage</string></property></widget></item>
-         <item row="3" column="0"><widget class="QLabel" name="detailLabel"><property name="text"><string>Low-level detail</string></property></widget></item>
-         <item row="3" column="1"><widget class="QSpinBox" name="detailSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
-         <item row="3" column="2"><widget class="QLabel" name="detailHelp"><property name="text"><string>breaths / consonants / tails</string></property></widget></item>
-         <item row="4" column="0"><widget class="QLabel" name="remixLabel"><property name="text"><string>Remix usability</string></property></widget></item>
-         <item row="4" column="1"><widget class="QSpinBox" name="remixSpin"><property name="minimum"><number>0</number></property><property name="maximum"><number>5</number></property><property name="specialValueText"><string>—</string></property></widget></item>
-         <item row="4" column="2"><widget class="QLabel" name="remixHelp"><property name="text"><string>would you actually use this stem?</string></property></widget></item>
-        </layout>
-       </item>
-       <item><widget class="QLabel" name="blindNotesLabel"><property name="text"><string>Notes</string></property></widget></item>
-       <item><widget class="QPlainTextEdit" name="blindNotesEdit"><property name="minimumSize"><size><width>0</width><height>70</height></size></property><property name="placeholderText"><string>Bleed, warble, missing consonants, phase issues…</string></property></widget></item>
-      </layout>
-     </widget>
     </item>
     <item>
      <layout class="QHBoxLayout" name="overallLayout">
@@ -584,9 +1491,18 @@
       </item>
       <item>
        <widget class="QPushButton" name="revealButton">
-        <property name="minimumSize"><size><width>130</width><height>38</height></size></property>
-        <property name="text"><string>REVEAL MODELS</string></property>
-        <property name="enabled"><bool>false</bool></property>
+        <property name="minimumSize">
+         <size>
+          <width>130</width>
+          <height>38</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>REVEAL MODELS</string>
+        </property>
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
        </widget>
       </item>
       <item>
@@ -619,8 +1535,39 @@
     </item>
    </layout>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QStatusBar" name="statusbar" />
+  <property name="styleSheet">
+   <string>
+QMainWindow, QWidget#centralwidget { background: #171b20; color: #e1e6ed; }
+QWidget { color: #e1e6ed; font-family: "DejaVu Sans"; font-size: 12px; }
+QGroupBox { background: #20262d; border: 1px solid #38414c; border-radius: 8px; margin-top: 10px; padding-top: 8px; font-weight: 600; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; color: #aab8c8; }
+QLabel { background: transparent; }
+QLabel#experimentLabel, QLabel#blindStatusLabel, QLabel#scaleLegend { color: #aab8c8; font-size: 11px; }
+QLabel#currentStemLabel { color: #73d6c6; }
+QPushButton { background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #343e49,stop:1 #29313b); border: 1px solid #4a5766; border-bottom: 2px solid #101419; border-radius: 5px; padding: 8px 12px; font-weight: 600; }
+QPushButton:hover { background: #3d4b59; border-color: #7c8d9f; }
+QPushButton:checked, QPushButton:pressed { background: #234c49; color: #91eadb; border: 1px solid #69cabb; }
+QPushButton:focus, QRadioButton:focus, QCheckBox:focus { border: 1px solid #e3bd78; }
+QPushButton#saveNextButton { background: #73d6c6; color: #122a28; border: 1px solid #9fefdf; border-bottom: 2px solid #387c70; }
+QPushButton#saveNextButton:hover { background: #9fefdf; }
+QPushButton#playButton { color: #91eadb; }
+QPushButton:disabled { color: #6e7b88; background: #242b33; border-color: #343e49; }
+QComboBox, QPlainTextEdit { background: #13191f; border: 1px solid #45515e; border-radius: 5px; padding: 6px; selection-background-color: #32685f; }
+QComboBox QAbstractItemView { background: #20262d; selection-background-color: #32685f; }
+QRadioButton, QCheckBox { spacing: 7px; padding: 4px; }
+QGroupBox#blindQcGroup QRadioButton { min-width: 28px; min-height: 28px; padding: 0 3px; background: #171e25; border: 1px solid #475563; border-radius: 4px; }
+QGroupBox#blindQcGroup QRadioButton::indicator { width: 0; height: 0; }
+QGroupBox#blindQcGroup QRadioButton:checked { background: #73d6c6; color: #122a28; border-color: #a6f0e2; font-weight: 700; }
+QGroupBox#blindQcGroup QRadioButton:hover { border-color: #91eadb; }
+QSlider::groove:horizontal { height: 5px; background: #10151b; border-radius: 2px; }
+QSlider::sub-page:horizontal { background: #62bbae; }
+QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: #cce8e4; border-radius: 5px; }
+QStatusBar { background: #11171c; color: #aab8c8; }
+QToolTip { background: #303b46; color: #ffffff; border: 1px solid #6d8293; padding: 5px; }
+</string>
+  </property>
  </widget>
- <resources/>
- <connections/>
+ <resources />
+ <connections />
 </ui>

@@ -15,3 +15,8 @@ data/results/*
 # Generated benchmark/listening artifacts
 data/batch-logs/
 data/listening/**/*.wav
+
+# Private listening assessments and randomized model identities
+data/listening/**/mapping.secret.json
+data/listening/**/scores.json
+/scores.json

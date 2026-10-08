@@ -1,0 +1,16 @@
+experiment: control-03-htdemucs-001
+
+input:
+  path: tests/audio/control-03-viet-female-pop.wav
+  sha256: c1647988352b80fb98e3eca2e58c6aaa69e871335969f5fe33cb564c5c10fa1e
+  material: vietnamese_female_pop
+  source_type: commercial_release
+  language: vi
+  vocal_style: melodic_female_pop
+  excerpt_start_seconds: 2
+  excerpt_duration_seconds: 30
+
+model:
+  engine: audio-separator
+  preset: balanced
+  name: htdemucs.yaml
