@@ -6,8 +6,8 @@ usage() {
 Usage: stem-separate PRESET INPUT [OUTPUT_DIR]
 
 Presets:
-  4stems     Fast four stems: bass, drums, other, vocals (default)
-  balanced   Standard HTDemucs four stems
+  4stems     Fast four stems: bass, drums, other, vocals
+  balanced   Recommended CPU-first HTDemucs four stems
   maximum    Fine-tuned HTDemucs four stems
   vocals     MelBand RoFormer vocals + instrumental
   6stems     Experimental bass/drums/other/vocals/guitar/piano
@@ -67,7 +67,7 @@ echo "Model:  $MODEL"
 echo "Input:  $INPUT"
 echo "Output: $OUTPUT"
 
-"$SEPARATOR" "$INPUT" \
+exec "$SEPARATOR" "$INPUT" \
   --model_filename "$MODEL" \
   --model_file_dir "$MODELS" \
   --output_dir "$OUTPUT" \

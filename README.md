@@ -398,21 +398,15 @@ The practical verdict is straightforward: use de-reverb only when the original a
 
 ## Local GUI MVP
 
-The repository includes a lightweight Tkinter GUI for the Linux workflow.
-
-After completing the installation, launch it from the repository root:
+The new Qt producer preview is available alongside the legacy Tkinter GUI. From the repository root, using the existing PySide6 QC environment:
 
 ```bash
-python3 gui/stem_lab_gui.py
+.venv-gui/bin/python gui/producer_qt.py
 ```
 
-If Tkinter is unavailable on Ubuntu or Linux Mint:
+The Qt producer preview supports single-file drag and drop, evidence-aligned presets (Balanced by default), an isolated per-track/preset export path, live output and process cancellation. It uses the existing `scripts/stem-separate` backend and shared model cache. The preview is not yet a validated release candidate: test real separation, cancel and Bitwig import locally before publishing. A non-empty export directory requires confirmation; use a fresh directory for reproducible tests.
 
-```bash
-sudo apt install python3-tk
-```
-
-The GUI uses the same `scripts/stem-separate` backend and shared model cache as the command-line workflow.
+The legacy Tkinter interface remains available at `python3 gui/stem_lab_gui.py` (requires `python3-tk` on some systems).
 
 | Preset | Model | Intended use |
 |---|---|---|

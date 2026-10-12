@@ -11,8 +11,8 @@ from tkinter import filedialog, messagebox, ttk
 
 
 PRESETS = {
+    "Balanced 4 stems (recommended)": "balanced",
     "Fast 4 stems": "4stems",
-    "Balanced 4 stems": "balanced",
     "Fine-tuned 4 stems": "maximum",
     "Vocals + instrumental": "vocals",
     "Six stems": "6stems",
@@ -37,7 +37,7 @@ class StemLab(tk.Tk):
 
         self.input_var = tk.StringVar()
         self.output_var = tk.StringVar()
-        self.preset_var = tk.StringVar(value="Fast 4 stems")
+        self.preset_var = tk.StringVar(value="Balanced 4 stems (recommended)")
         self.status_var = tk.StringVar(value="Ready")
 
         self.build_interface()
