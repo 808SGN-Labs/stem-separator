@@ -845,8 +845,13 @@ class Producer(QMainWindow):
             if self.batch_active:
                 self.batch_active = False
                 self.batch_index = -1
+                self.cancel_requested = True
                 self.status.setText("CANCELLED")
                 self.set_running(False)
+                self.batch_start_button.setEnabled(True)
+                self.clear_queue_button.setEnabled(True)
+                self.add_files_button.setEnabled(True)
+                self.add_folder_button.setEnabled(True)
                 self.unlock_queue_presets()
             return
         self.cancel_requested = True

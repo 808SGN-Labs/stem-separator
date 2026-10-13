@@ -199,3 +199,9 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 5. Exercise Cancel mid-process, duplicate/folder drag import and nonempty-output skip; verify error messages and status integrity.
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
+
+## Post-alpha hardening (uncommitted)
+
+- Fixed cancellation during the queued-but-not-started interval: release Add/Clear/Start controls and preset combos, retain `CANCELLED` status, and prevent the scheduled next job from starting.
+- Added `test_cancel_between_jobs_restores_queue_controls` covering this case.
+- This is a new change after commit `52b7171`; local regression execution is still required before committing.

@@ -150,6 +150,22 @@ class QueueTests(unittest.TestCase):
         self.w.add_paths([str(self.audio('a.wav')),str(self.audio('b.wav'))])
         self.w.start_batch();self.wait_done()
         self.assertEqual([self.w.queue_list.topLevelItem(i).text(2) for i in range(2)],['Failed','Failed'])
+    def test_cancel_between_jobs_restores_queue_controls(self):
+        self.w.add_paths([str(self.audio('a.wav')), str(self.audio('b.wav'))])
+        self.w.start_batch()
+        self.assertTrue(self.w.batch_active)
+        self.assertFalse(self.w.batch_start_button.isEnabled())
+        self.w.cancel()  # No QProcess has started yet; next job is queued by QTimer.
+        app.processEvents()
+        self.assertFalse(self.w.batch_active)
+        self.assertEqual(self.w.status.text(), 'CANCELLED')
+        self.assertTrue(self.w.batch_start_button.isEnabled())
+        self.assertTrue(self.w.clear_queue_button.isEnabled())
+        self.assertTrue(self.w.add_files_button.isEnabled())
+        self.assertTrue(self.w.add_folder_button.isEnabled())
+        self.assertTrue(self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1).isEnabled())
+        self.assertFalse((self.root / 'a_stemlab').exists())
+
     def test_cancel_kills_stubborn_process(self):
         self.backend.write_text('#!/usr/bin/env python3\nimport signal,time\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nprint("ready",flush=True)\ntime.sleep(30)\n')
         self.w.add_paths([str(self.audio('a.wav')),str(self.audio('b.wav'))])
