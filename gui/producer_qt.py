@@ -784,8 +784,11 @@ class Producer(QMainWindow):
                 reference = self.probe_audio(source)
                 for path in paths:
                     info = self.probe_audio(path)
-                    if info['channels'] != reference['channels'] or abs(info['duration'] - reference['duration']) > 0.25:
-                        raise ValueError(f'{path.name}: channels or duration differ from input')
+                    if info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le'):
+                        raise ValueError(f'{path.name}: unsupported WAV codec {info["codec"]}')
+                    if (info['rate'] != reference['rate'] or info['channels'] != reference['channels']
+                            or abs(info['duration'] - reference['duration']) > 0.25):
+                        raise ValueError(f'{path.name}: sample rate, channels or duration differ from input')
                 self.append_log('Drum output check PASSED: six nonempty WAV stems and metadata verified.')
                 return True
             except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError) as exc:

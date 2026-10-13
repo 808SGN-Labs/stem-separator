@@ -200,6 +200,12 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Drum-Parts metadata hardening (pending local regression)
+
+- Drum-Parts six-stem validation now checks supported PCM WAV codecs and sample-rate parity with source, in addition to the existing channel/duration checks.
+- Expanded the synthetic Drum-Parts regression to reject a missing stem, mismatched sample rate and unsupported codec. Real six-stem runtime acceptance remains a separate check.
+- No processing or file overwrite logic changed.
+
 ## Existing-output verification on re-import (uncommitted)
 
 - Importing a source or changing its per-row preset now inspects the matching output directory without launching separation.

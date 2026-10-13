@@ -117,8 +117,27 @@ class QueueTests(unittest.TestCase):
         self.w.presets.setCurrentIndex(self.w.presets.findData('drum-parts'))
         self.w.current_output = target
         self.assertTrue(self.w.validate_output())
-        (target / 'drums_(kick)_MDX23C-DrumSep-aufr33-jarredou.wav').unlink()
+        kick = target / 'drums_(kick)_MDX23C-DrumSep-aufr33-jarredou.wav'
+        kick.unlink()
         self.assertFalse(self.w.validate_output())
+        wav(kick)
+        original = self.w.probe_audio
+        with patch.object(self.w, 'probe_audio') as probe:
+            def wrong_rate(path):
+                info = original(path)
+                if Path(path) == kick:
+                    info['rate'] = 48000
+                return info
+            probe.side_effect = wrong_rate
+            self.assertFalse(self.w.validate_output())
+        with patch.object(self.w, 'probe_audio') as probe:
+            def wrong_codec(path):
+                info = original(path)
+                if Path(path) == kick:
+                    info['codec'] = 'mp3'
+                return info
+            probe.side_effect = wrong_codec
+            self.assertFalse(self.w.validate_output())
 
     def test_copy_button_follows_details_visibility(self):
         self.assertFalse(self.w.copy_log_button.isVisible())
