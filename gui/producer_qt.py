@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QProcess, Qt, QUrl, Signal, QTimer, QMimeData
-from PySide6.QtGui import QDesktopServices, QDrag
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QDrag
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
@@ -58,10 +58,18 @@ QPushButton#primary:disabled { background: #263b3d; color: #728987; border-color
 QProgressBar { background: #0c1218; border: 1px solid #374753; border-radius: 5px;
                text-align: center; height: 9px; }
 QProgressBar::chunk { background: #73d6c6; border-radius: 4px; }
-QTreeWidget { background: #0d1319; border: 1px solid #364653; border-radius: 7px; alternate-background-color: #131c24; }
-QTreeWidget::item { min-height: 30px; padding: 2px 5px; }
+QTreeWidget { background: #10171d; border: 1px solid #33424d; border-radius: 8px; alternate-background-color: #172129; outline: 0; }
+QTreeWidget::item { min-height: 36px; padding: 4px 8px; border-bottom: 1px solid #24303a; }
+QTreeWidget::item:hover { background: #21323c; }
 QTreeWidget::item:selected { background: #29464a; }
-QHeaderView::section { background: #202c36; color: #a9bfca; border: 0; border-bottom: 1px solid #354651; padding: 8px; font-weight: 700; }
+QTreeWidget::branch { background: transparent; }
+QHeaderView::section { background: #1b2730; color: #a9bfca; border: 0; border-bottom: 1px solid #354651; padding: 10px 8px; font-weight: 700; letter-spacing: 1px; }
+QComboBox#queueMode { background: #1c2a33; border: 1px solid #3b4d59; border-radius: 6px; padding: 5px 8px; }
+QComboBox#queueMode:hover { border-color: #668b96; }
+QPushButton#quiet { background: transparent; border: 1px solid #33424d; color: #acbbc5; }
+QPushButton#quiet:hover { background: #253540; color: #e6ecf0; }
+QLabel#queueHint { color: #879aa8; font-size: 12px; }
+QLabel#footer { color: #718593; font-size: 11px; }
 """
 
 
@@ -134,13 +142,13 @@ class QueueList(QTreeWidget):
         self.setHeaderLabels(["FILE", "MODE", "STATUS"])
         self.setAlternatingRowColors(True)
         self.setRootIsDecorated(True)
-        self.setIndentation(18)
+        self.setIndentation(22)
         self.header().setStretchLastSection(False)
         self.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.header().setSectionResizeMode(1, QHeaderView.Fixed)
-        self.header().resizeSection(1, 260)
+        self.header().resizeSection(1, 240)
         self.header().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.header().resizeSection(2, 150)
+        self.header().resizeSection(2, 170)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._drag_origin = None
 
@@ -201,8 +209,8 @@ class Producer(QMainWindow):
         scroll.setWidget(outer)
         self.setCentralWidget(scroll)
         root = QVBoxLayout(outer)
-        root.setContentsMargins(28, 22, 28, 22)
-        root.setSpacing(17)
+        root.setContentsMargins(24, 20, 24, 20)
+        root.setSpacing(14)
 
         header = QHBoxLayout()
         brand = QLabel("808SGN  /  STEMLAB")
@@ -242,8 +250,8 @@ class Producer(QMainWindow):
         queue_panel = QFrame()
         queue_panel.setObjectName("panel")
         queue_box = QVBoxLayout(queue_panel)
-        queue_box.setContentsMargins(16, 16, 16, 16)
-        queue_box.setSpacing(10)
+        queue_box.setContentsMargins(18, 18, 18, 16)
+        queue_box.setSpacing(12)
         root.addWidget(queue_panel, 1)
 
         queue_header = QHBoxLayout()
@@ -256,11 +264,12 @@ class Producer(QMainWindow):
         self.add_folder_button.clicked.connect(self.add_batch_folder)
         queue_header.addWidget(self.add_folder_button)
         self.clear_queue_button = QPushButton("Clear")
+        self.clear_queue_button.setObjectName("quiet")
         self.clear_queue_button.clicked.connect(self.clear_batch)
         queue_header.addWidget(self.clear_queue_button)
         queue_box.addLayout(queue_header)
         drop_hint = QLabel("Drop audio files or folders into the queue · Set a mode per track")
-        drop_hint.setObjectName("muted")
+        drop_hint.setObjectName("queueHint")
         queue_box.addWidget(drop_hint)
         self.queue_list = QueueList()
         self.queue_list.pathsDropped.connect(self.add_paths)
@@ -269,7 +278,7 @@ class Producer(QMainWindow):
         self.queue_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.queue_list.customContextMenuRequested.connect(self.stem_context_menu)
         self.queue_list.setToolTip("Drop audio files or folders here (top-level only)")
-        self.queue_list.setMinimumHeight(255)
+        self.queue_list.setMinimumHeight(280)
         queue_box.addWidget(self.queue_list, 1)
         start_row = QHBoxLayout()
         start_row.addStretch()
@@ -329,7 +338,7 @@ class Producer(QMainWindow):
         self.log.setVisible(False)
 
         footer = QLabel("StemLab research preview  ·  Pilot model rankings are source-dependent")
-        footer.setObjectName("muted")
+        footer.setObjectName("footer")
         root.addWidget(footer)
 
     def eventFilter(self, obj, event):
@@ -454,6 +463,7 @@ class Producer(QMainWindow):
         item.setExpanded(False)
         self.queue_list.addTopLevelItem(item)
         mode = QComboBox()
+        mode.setObjectName('queueMode')
         for label, code, _ in PRESETS:
             mode.addItem(label, code)
         index = len(self.batch_paths) - 1
@@ -543,8 +553,21 @@ class Producer(QMainWindow):
 
     def set_batch_label(self, index, state):
         item = self.queue_list.topLevelItem(index)
-        item.setText(2, 'Unverified' if state.upper() == 'COMPLETE — UNVERIFIED' else state.title())
-        item.setToolTip(2, state.title())
+        label = 'Unverified' if state.upper() == 'COMPLETE — UNVERIFIED' else state.title()
+        item.setText(2, label)
+        item.setToolTip(2, label)
+        key = state.upper()
+        if key in ('VERIFIED', 'VERIFIED EXISTING', 'EXISTING STEMS'):
+            color = '#83d2b5'
+        elif key in ('PROCESSING',):
+            color = '#75cfc5'
+        elif key in ('FAILED', 'BLOCKED', 'MISSING SOURCE'):
+            color = '#ee9b98'
+        elif key in ('PARTIAL / UNKNOWN', 'UNVERIFIED', 'COMPLETE — UNVERIFIED'):
+            color = '#e2bd83'
+        else:
+            color = '#9dafbc'
+        item.setForeground(2, QBrush(QColor(color)))
         self.refresh_stem_children(index)
 
     def start_batch(self):

@@ -200,6 +200,13 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Producer GUI Polish v1 (pending local regression)
+
+- Refined queue row height, header contrast, padding, indentation, hover and selected states; adjusted mode/status column proportions.
+- Styled per-row mode selectors and quieter Clear action. Tightened workspace spacing; kept log/cancel, preview, drag-out, and queue handlers intact.
+- Added status text coloring: green verified, teal processing, coral errors, amber partial/unverified, neutral queued/skipped. Colors supplement text rather than replacing it.
+- Added regression coverage for mode control styling and distinct status foregrounds; visual review on a real Linux desktop and local regression execution remain pending.
+
 ## Drum-Parts metadata hardening (pending local regression)
 
 - Drum-Parts six-stem validation now checks supported PCM WAV codecs and sample-rate parity with source, in addition to the existing channel/duration checks.

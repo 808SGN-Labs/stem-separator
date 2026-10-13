@@ -152,6 +152,22 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(app.clipboard().text(), 'Process completed\nOutput verified')
         self.assertEqual(self.w.copy_log_button.text(), 'Copied')
 
+    def test_queue_polish_status_colors_and_controls(self):
+        source = self.audio('polish.wav')
+        self.w.add_paths([str(source)])
+        row = self.w.queue_list.topLevelItem(0)
+        mode = self.w.queue_list.itemWidget(row, 1)
+        self.assertEqual(mode.objectName(), 'queueMode')
+        self.assertEqual(self.w.clear_queue_button.objectName(), 'quiet')
+        self.w.set_batch_label(0, 'VERIFIED')
+        verified = row.foreground(2).color().name()
+        self.w.set_batch_label(0, 'FAILED')
+        failed = row.foreground(2).color().name()
+        self.w.set_batch_label(0, 'PROCESSING')
+        processing = row.foreground(2).color().name()
+        self.assertEqual(len({verified, failed, processing}), 3)
+        self.assertEqual(row.text(2), 'Processing')
+
     def test_queue_is_primary_workspace(self):
         self.assertTrue(self.w.input.isHidden())
         self.assertTrue(self.w.presets.isHidden())
