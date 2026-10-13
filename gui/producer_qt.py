@@ -7,12 +7,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QProcess, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QEvent, QProcess, Qt, QUrl, Signal, QTimer, QMimeData
+from PySide6.QtGui import QDesktopServices, QDrag
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
-    QPushButton, QVBoxLayout, QWidget,
+    QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QListWidget, QSizePolicy, QScrollArea,
+    QPushButton, QVBoxLayout, QWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QHeaderView, QMenu,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +21,7 @@ WRAPPER = ROOT / "scripts" / "stem-separate"
 # tqdm reports per-model steps, not overall job completion.
 STEP_PROGRESS = re.compile(r"(\d{1,3})%\|[^\r\n]*?\|\s*(\d+)\s*/\s*(\d+)")
 FOUR_STEM_PRESETS = {"balanced", "4stems", "maximum"}
+AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg", ".aiff", ".aif"}
 
 PRESETS = [
     ("Balanced · Recommended", "balanced", "4 stems · Best practical CPU starting point"),
@@ -33,9 +35,10 @@ PRESETS = [
 
 STYLE = """
 QWidget { color: #e6ecf0; font-size: 13px; font-family: 'Noto Sans', sans-serif; }
-QMainWindow, QWidget#appRoot { background: #12171d; }
+QMainWindow, QWidget#appRoot, QScrollArea#workspaceScroll { background: #12171d; }
 QLabel { background: transparent; }
 QFrame#panel { background: #1a222b; border: 1px solid #2d3a46; border-radius: 12px; }
+QToolButton { background: transparent; border: 0; color: #a9bcc7; font-weight: 700; padding: 6px 0; }
 QLabel#brand { font-size: 26px; font-weight: 800; color: #f0f6f8; }
 QLabel#muted { color: #91a5b4; }
 QLabel#section { font-size: 15px; font-weight: 700; }
@@ -55,6 +58,10 @@ QPushButton#primary:disabled { background: #263b3d; color: #728987; border-color
 QProgressBar { background: #0c1218; border: 1px solid #374753; border-radius: 5px;
                text-align: center; height: 9px; }
 QProgressBar::chunk { background: #73d6c6; border-radius: 4px; }
+QTreeWidget { background: #0d1319; border: 1px solid #364653; border-radius: 7px; alternate-background-color: #131c24; }
+QTreeWidget::item { min-height: 30px; padding: 2px 5px; }
+QTreeWidget::item:selected { background: #29464a; }
+QHeaderView::section { background: #202c36; color: #a9bfca; border: 0; border-bottom: 1px solid #354651; padding: 8px; font-weight: 700; }
 """
 
 
@@ -80,23 +87,119 @@ class DropEdit(QLineEdit):
             event.acceptProposedAction()
 
 
+class QueueList(QTreeWidget):
+    pathsDropped = Signal(list)
+
+    def mousePressEvent(self, event):
+        self._drag_origin = event.position().toPoint() if event.button() == Qt.LeftButton else None
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (self._drag_origin is not None and event.buttons() & Qt.LeftButton
+                and (event.position().toPoint() - self._drag_origin).manhattanLength()
+                >= QApplication.startDragDistance()):
+            origin = self._drag_origin
+            self._drag_origin = None
+            item = self.itemAt(origin)
+            path = item.data(0, Qt.UserRole) if item else None
+            if path and Path(path).is_file():
+                self.drag_stem(path)
+                return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_origin = None
+        super().mouseReleaseEvent(event)
+
+    def drag_stem(self, path):
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(path))])
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+        return drag.exec(Qt.CopyAction)
+
+    def startDrag(self, supported_actions):
+        item = self.currentItem()
+        path = item.data(0, Qt.UserRole) if item else None
+        if path and Path(path).is_file():
+            self.drag_stem(path)
+
+    def __init__(self):
+        super().__init__()
+        self.setAcceptDrops(True)
+        self.setDragDropMode(QTreeWidget.DragDrop)
+        self.setDragEnabled(True)
+        self.setDefaultDropAction(Qt.CopyAction)
+        self.setColumnCount(3)
+        self.setHeaderLabels(["FILE", "MODE", "STATUS"])
+        self.setAlternatingRowColors(True)
+        self.setRootIsDecorated(True)
+        self.setIndentation(18)
+        self.header().setStretchLastSection(False)
+        self.header().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.header().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.header().resizeSection(1, 260)
+        self.header().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.header().resizeSection(2, 150)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._drag_origin = None
+
+    def dragEnterEvent(self, event):
+        if any(url.isLocalFile() for url in event.mimeData().urls()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if any(url.isLocalFile() for url in event.mimeData().urls()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
+        if paths:
+            self.pathsDropped.emit(paths)
+            event.acceptProposedAction()
+
+
 class Producer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("808SGN StemLab — Producer")
-        self.resize(980, 740)
-        self.setMinimumSize(760, 580)
+        self.resize(1080, 720)
+        self.setMinimumSize(760, 540)
         self.process = None
         self.cancel_requested = False
         self.output_user_set = False
         self.current_output = None
         self._progress_tail = ""
+        self.batch_paths = []
+        self.batch_presets = []
+        self.batch_index = -1
+        self.batch_active = False
+        self.batch_preset = None
+        self.batch_custom_output = None
+        self.preview_audio = QAudioOutput(self)
+        self.preview_audio.setVolume(0.7)
+        self.preview_player = QMediaPlayer(self)
+        self.preview_player.setAudioOutput(self.preview_audio)
         self.build_ui()
 
     def build_ui(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setObjectName("workspaceScroll")
+        # Accept drops on blank workspace surfaces, not only inside queue/input.
+        scroll.viewport().setAcceptDrops(True)
+        scroll.viewport().installEventFilter(self)
         outer = QWidget()
+        outer.setAcceptDrops(True)
+        outer.installEventFilter(self)
         outer.setObjectName("appRoot")
-        self.setCentralWidget(outer)
+        scroll.setWidget(outer)
+        self.setCentralWidget(scroll)
         root = QVBoxLayout(outer)
         root.setContentsMargins(28, 22, 28, 22)
         root.setSpacing(17)
@@ -115,54 +218,71 @@ class Producer(QMainWindow):
         sub.setObjectName("muted")
         root.addWidget(sub)
 
-        panel = QFrame()
-        panel.setObjectName("panel")
-        box = QVBoxLayout(panel)
-        box.setContentsMargins(20, 20, 20, 20)
-        box.setSpacing(12)
-        box.addWidget(self.section("01   SOURCE AUDIO"))
-        source_row = QHBoxLayout()
+        # Internal run-state controls retained for backend/test compatibility.
+        # The queue owns the visible import and per-file mode controls.
         self.input = DropEdit()
-        self.input.fileDropped.connect(self.set_input)
+        self.input.setParent(self)
+        self.input.hide()
         self.input.textChanged.connect(self.update_output)
-        source_row.addWidget(self.input, 1)
-        browse = QPushButton("Browse")
-        browse.clicked.connect(self.browse_input)
-        source_row.addWidget(browse)
-        box.addLayout(source_row)
-        hint = QLabel("WAV / FLAC recommended · MP3, M4A, OGG and AIFF accepted by backend")
-        hint.setObjectName("muted")
-        box.addWidget(hint)
-
-        box.addSpacing(10)
-        box.addWidget(self.section("02   SEPARATION MODE"))
-        self.presets = QComboBox()
+        self.input_browse = QPushButton("Browse", self)
+        self.input_browse.hide()
+        self.presets = QComboBox(self)
         for label, code, desc in PRESETS:
             self.presets.addItem(label, code)
+        self.presets.hide()
+        self.description = QLabel(PRESETS[0][2], self)
+        self.description.hide()
         self.presets.currentIndexChanged.connect(self.update_preset)
-        box.addWidget(self.presets)
-        self.description = QLabel(PRESETS[0][2])
-        self.description.setObjectName("muted")
-        box.addWidget(self.description)
-
-        box.addSpacing(10)
-        box.addWidget(self.section("03   EXPORT DIRECTORY"))
-        export_row = QHBoxLayout()
-        self.output = QLineEdit()
-        self.output.setPlaceholderText("Automatically set after choosing source")
+        self.output = QLineEdit(self)
+        self.output.hide()
         self.output.textEdited.connect(self.mark_output_custom)
-        export_row.addWidget(self.output, 1)
-        output_browse = QPushButton("Browse")
-        output_browse.clicked.connect(self.browse_output)
-        export_row.addWidget(output_browse)
-        box.addLayout(export_row)
-        root.addWidget(panel)
+        self.output_browse = QPushButton("Browse", self)
+        self.output_browse.hide()
+
+        queue_panel = QFrame()
+        queue_panel.setObjectName("panel")
+        queue_box = QVBoxLayout(queue_panel)
+        queue_box.setContentsMargins(16, 16, 16, 16)
+        queue_box.setSpacing(10)
+        root.addWidget(queue_panel, 1)
+
+        queue_header = QHBoxLayout()
+        queue_header.addWidget(self.section("PROCESSING QUEUE"))
+        queue_header.addStretch()
+        self.add_files_button = QPushButton("Add files")
+        self.add_files_button.clicked.connect(self.add_batch_files)
+        queue_header.addWidget(self.add_files_button)
+        self.add_folder_button = QPushButton("Add folder")
+        self.add_folder_button.clicked.connect(self.add_batch_folder)
+        queue_header.addWidget(self.add_folder_button)
+        self.clear_queue_button = QPushButton("Clear")
+        self.clear_queue_button.clicked.connect(self.clear_batch)
+        queue_header.addWidget(self.clear_queue_button)
+        queue_box.addLayout(queue_header)
+        drop_hint = QLabel("Drop audio files or folders into the queue · Set a mode per track")
+        drop_hint.setObjectName("muted")
+        queue_box.addWidget(drop_hint)
+        self.queue_list = QueueList()
+        self.queue_list.pathsDropped.connect(self.add_paths)
+        self.queue_list.itemExpanded.connect(self.on_queue_expanded)
+        self.queue_list.itemDoubleClicked.connect(self.preview_stem_item)
+        self.queue_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.queue_list.customContextMenuRequested.connect(self.stem_context_menu)
+        self.queue_list.setToolTip("Drop audio files or folders here (top-level only)")
+        self.queue_list.setMinimumHeight(255)
+        queue_box.addWidget(self.queue_list, 1)
+        start_row = QHBoxLayout()
+        start_row.addStretch()
+        self.batch_start_button = QPushButton("START PROCESSING  →")
+        self.batch_start_button.setObjectName("primary")
+        self.batch_start_button.clicked.connect(self.start_batch)
+        start_row.addWidget(self.batch_start_button)
+        queue_box.addLayout(start_row)
 
         action = QHBoxLayout()
-        self.start_button = QPushButton("START SEPARATION  →")
-        self.start_button.setObjectName("primary")
-        self.start_button.clicked.connect(self.start)
-        action.addWidget(self.start_button)
+        # Retained internally for run-state compatibility; one visible start action.
+        self.start_button = QPushButton()
+        self.start_button.setVisible(False)
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setEnabled(False)
         self.cancel_button.clicked.connect(self.cancel)
@@ -185,8 +305,18 @@ class Producer(QMainWindow):
         root.addLayout(progress_row)
 
         log_header = QHBoxLayout()
-        log_header.addWidget(self.section("PROCESS LOG"))
+        self.log_toggle = QToolButton()
+        self.log_toggle.setText("▸  PROCESS DETAILS")
+        self.log_toggle.setCheckable(True)
+        self.log_toggle.setChecked(False)
+        self.log_toggle.toggled.connect(self.toggle_log)
+        log_header.addWidget(self.log_toggle)
         log_header.addStretch()
+        self.copy_log_button = QPushButton("Copy details")
+        self.copy_log_button.setToolTip("Copy all process details to clipboard")
+        self.copy_log_button.clicked.connect(self.copy_process_details)
+        self.copy_log_button.setVisible(False)
+        log_header.addWidget(self.copy_log_button)
         self.status = QLabel("READY")
         self.status.setObjectName("muted")
         log_header.addWidget(self.status)
@@ -194,11 +324,40 @@ class Producer(QMainWindow):
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setPlaceholderText("Your local processing output appears here.")
-        root.addWidget(self.log, 1)
+        self.log.setMinimumHeight(140)
+        root.addWidget(self.log)
+        self.log.setVisible(False)
 
         footer = QLabel("StemLab research preview  ·  Pilot model rankings are source-dependent")
         footer.setObjectName("muted")
         root.addWidget(footer)
+
+    def eventFilter(self, obj, event):
+        if event.type() in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
+            if self.batch_active or self.process is not None:
+                event.ignore()
+                return True
+            paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
+            if not paths:
+                event.ignore()
+                return True
+            if event.type() == QEvent.Drop:
+                self.add_paths(paths)
+            event.acceptProposedAction()
+            return True
+        return super().eventFilter(obj, event)
+
+    def copy_process_details(self):
+        details = self.log.toPlainText()
+        if details:
+            QApplication.clipboard().setText(details)
+            self.copy_log_button.setText("Copied")
+            QTimer.singleShot(2000, lambda: self.copy_log_button.setText("Copy details"))
+
+    def toggle_log(self, shown):
+        self.copy_log_button.setVisible(shown)
+        self.log.setVisible(shown)
+        self.log_toggle.setText("▾  PROCESS DETAILS" if shown else "▸  PROCESS DETAILS")
 
     @staticmethod
     def section(title):
@@ -207,6 +366,8 @@ class Producer(QMainWindow):
         return label
 
     def set_input(self, path):
+        if self.batch_active or self.process is not None:
+            return
         if Path(path).is_file():
             self.input.setText(path)
         else:
@@ -221,6 +382,8 @@ class Producer(QMainWindow):
             self.set_input(path)
 
     def browse_output(self):
+        if self.batch_active or self.process is not None:
+            return
         path = QFileDialog.getExistingDirectory(self, "Choose output folder")
         if path:
             self.output_user_set = True
@@ -242,6 +405,230 @@ class Producer(QMainWindow):
     def update_preset(self, index):
         self.description.setText(PRESETS[index][2])
         self.update_output()
+
+    def add_batch_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Add audio files", "",
+            "Audio (*.wav *.flac *.mp3 *.m4a *.ogg *.aiff *.aif);;All files (*)"
+        )
+        self.add_paths(paths)
+
+    def add_batch_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Add folder to queue")
+        if folder:
+            self.add_paths([folder])
+
+    def add_paths(self, inputs):
+        if self.batch_active or self.process is not None:
+            return
+        candidates = []
+        for value in inputs:
+            path = Path(value).expanduser()
+            if path.is_dir():
+                try:
+                    candidates.extend(sorted(
+                        (entry for entry in path.iterdir()
+                         if entry.is_file() and entry.suffix.lower() in AUDIO_SUFFIXES),
+                        key=lambda entry: entry.name.casefold()
+                    ))
+                except OSError as error:
+                    self.append_log(f"Cannot read folder: {error}")
+            elif path.is_file() and path.suffix.lower() in AUDIO_SUFFIXES:
+                candidates.append(path)
+        added = 0
+        for path in candidates:
+            resolved = path.resolve()
+            if resolved not in self.batch_paths:
+                self.batch_paths.append(resolved)
+                self.batch_presets.append("balanced")
+                self.add_queue_row(resolved)
+                added += 1
+        if not added:
+            self.status.setText("NO NEW AUDIO FILES")
+
+    def add_queue_row(self, source):
+        item = QTreeWidgetItem([source.name, "", "Queued"])
+        item.setToolTip(0, str(source) + "\nDrag filename to export original audio")
+        item.setData(0, Qt.UserRole, str(source))
+        item.setChildIndicatorPolicy(QTreeWidgetItem.ShowIndicator)
+        item.setExpanded(False)
+        self.queue_list.addTopLevelItem(item)
+        mode = QComboBox()
+        for label, code, _ in PRESETS:
+            mode.addItem(label, code)
+        index = len(self.batch_paths) - 1
+        mode.setCurrentIndex(mode.findData(self.batch_presets[index]))
+        mode.currentIndexChanged.connect(lambda _, row=index, combo=mode: self.set_job_preset(row, combo.currentData()))
+        self.queue_list.setItemWidget(item, 1, mode)
+        item.setSizeHint(0, mode.sizeHint())
+        self.refresh_stem_children(index)
+
+    def on_queue_expanded(self, item):
+        index = self.queue_list.indexOfTopLevelItem(item)
+        if index >= 0:
+            self.refresh_stem_children(index)
+
+    @staticmethod
+    def stem_display_name(path):
+        match = re.search(r"_\(([^)]+)\)_", path.name)
+        return match.group(1).replace('_', ' ').title() if match else path.stem
+
+    def preview_stem_item(self, item, column=0):
+        path = item.data(0, Qt.UserRole)
+        if not path or not Path(path).is_file():
+            return
+        url = QUrl.fromLocalFile(path)
+        if self.preview_player.source() == url and self.preview_player.playbackState() == QMediaPlayer.PlayingState:
+            self.preview_player.stop()
+            self.status.setText('PREVIEW STOPPED')
+        else:
+            self.preview_player.setSource(url)
+            self.preview_player.play()
+            self.status.setText('PREVIEW  ' + self.stem_display_name(Path(path)))
+
+    def stem_context_menu(self, point):
+        item = self.queue_list.itemAt(point)
+        path = item.data(0, Qt.UserRole) if item else None
+        if not path or not Path(path).is_file():
+            return
+        menu = QMenu(self)
+        menu.addAction('Play / Stop preview', lambda: self.preview_stem_item(item))
+        menu.addAction('Copy file path', lambda: QApplication.clipboard().setText(path))
+        menu.addAction('Open containing folder', lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(path).parent))))
+        menu.exec(self.queue_list.viewport().mapToGlobal(point))
+
+    def stem_output_dir(self, index):
+        source = self.batch_paths[index]
+        preset = self.batch_presets[index]
+        if self.batch_custom_output and len(self.batch_paths) == 1:
+            return Path(self.batch_custom_output).expanduser()
+        return source.parent / (source.stem + "_stemlab") / preset
+
+    def refresh_stem_children(self, index):
+        if not 0 <= index < len(self.batch_paths):
+            return
+        parent = self.queue_list.topLevelItem(index)
+        expanded = parent.isExpanded()
+        parent.takeChildren()
+        directory = self.stem_output_dir(index)
+        try:
+            stems = sorted((p for p in directory.iterdir()
+                            if p.is_file() and p.suffix.lower() == ".wav" and p.stat().st_size > 0),
+                           key=lambda p: p.name.casefold()) if directory.is_dir() else []
+        except OSError:
+            stems = []
+        for path in stems:
+            child = QTreeWidgetItem([self.stem_display_name(path), "", "Ready"])
+            child.setToolTip(0, str(path))
+            child.setData(0, Qt.UserRole, str(path))
+            parent.addChild(child)
+        parent.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless if stems
+                                      else QTreeWidgetItem.ShowIndicator)
+        if parent.isExpanded() != expanded:
+            parent.setExpanded(expanded)
+
+    def set_job_preset(self, index, preset):
+        if not self.batch_active and 0 <= index < len(self.batch_presets):
+            self.batch_presets[index] = preset
+            self.refresh_stem_children(index)
+
+    def clear_batch(self):
+        if self.batch_active:
+            return
+        self.batch_paths.clear()
+        self.batch_presets.clear()
+        self.queue_list.clear()
+
+    def set_batch_label(self, index, state):
+        item = self.queue_list.topLevelItem(index)
+        item.setText(2, 'Unverified' if state.upper() == 'COMPLETE — UNVERIFIED' else state.title())
+        item.setToolTip(2, state.title())
+        self.refresh_stem_children(index)
+
+    def start_batch(self):
+        if self.batch_active or self.process is not None:
+            return
+        if not self.batch_paths:
+            value = self.input.text().strip()
+            source = Path(value).expanduser()
+            if not source.is_file():
+                QMessageBox.warning(self, "No audio", "Add audio files or select a source.")
+                return
+            resolved = source.resolve()
+            self.batch_paths.append(resolved)
+            self.batch_presets.append(self.presets.currentData())
+            self.add_queue_row(resolved)
+        self.log.clear()
+        self.batch_active = True
+        self.batch_index = -1
+        self.cancel_requested = False
+        self.batch_preset = self.presets.currentData()
+        for index in range(len(self.batch_paths)):
+            combo = self.queue_list.itemWidget(self.queue_list.topLevelItem(index), 1)
+            if combo:
+                combo.setEnabled(False)
+        self.batch_custom_output = (self.output.text().strip() if len(self.batch_paths) == 1 and self.output_user_set else None)
+        for index in range(len(self.batch_paths)):
+            self.set_batch_label(index, "QUEUED")
+        self.batch_start_button.setEnabled(False)
+        self.clear_queue_button.setEnabled(False)
+        self.add_files_button.setEnabled(False)
+        self.add_folder_button.setEnabled(False)
+        self.presets.setEnabled(False)
+        self.set_running(False)
+        QTimer.singleShot(0, self.run_next_batch)
+
+    def run_next_batch(self):
+        if not self.batch_active:
+            return
+        self.batch_index += 1
+        if self.batch_index >= len(self.batch_paths):
+            self.batch_active = False
+            self.batch_index = -1
+            self.batch_start_button.setEnabled(True)
+            self.clear_queue_button.setEnabled(True)
+            self.add_files_button.setEnabled(True)
+            self.add_folder_button.setEnabled(True)
+            self.presets.setEnabled(True)
+            self.input.setEnabled(True)
+            self.output.setEnabled(True)
+            self.start_button.setEnabled(True)
+            self.set_running(False)
+            self.status.setText("QUEUE FINISHED — CHECK ROW STATUS")
+            self.unlock_queue_presets()
+            return
+        source = self.batch_paths[self.batch_index]
+        preset = self.batch_presets[self.batch_index]
+        target = self.stem_output_dir(self.batch_index)
+        try:
+            skip = not source.is_file() or (
+                target.exists() and (not target.is_dir() or any(target.iterdir()))
+            )
+        except OSError as error:
+            self.set_batch_label(self.batch_index, "FAILED")
+            self.append_log(f"Cannot inspect output for {source.name}: {error}")
+            QTimer.singleShot(0, self.run_next_batch)
+            return
+        if skip:
+            self.set_batch_label(self.batch_index, "SKIPPED")
+            self.append_log(f"Skipped {source.name}: missing source or output path is not an empty directory.")
+            QTimer.singleShot(0, self.run_next_batch)
+            return
+        self.set_batch_label(self.batch_index, "PROCESSING")
+        self.presets.setCurrentIndex(self.presets.findData(preset))
+        self.input.setText(str(source))
+        self.output_user_set = False
+        self.output.setText(str(target))
+        self.start()
+        if self.process is None:
+            self.set_batch_label(self.batch_index, "FAILED")
+            QTimer.singleShot(0, self.run_next_batch)
+
+    def unlock_queue_presets(self):
+        for index in range(self.queue_list.topLevelItemCount()):
+            combo = self.queue_list.itemWidget(self.queue_list.topLevelItem(index), 1)
+            if combo:
+                combo.setEnabled(True)
 
     def append_log(self, data):
         self.log.appendPlainText(data.rstrip("\n"))
@@ -265,7 +652,10 @@ class Producer(QMainWindow):
             if dest == source.resolve() or dest == source.parent.resolve():
                 QMessageBox.warning(self, "Unsafe output", "Choose a separate output directory.")
                 return
-            if dest.exists() and any(dest.iterdir()):
+            if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
+                if self.batch_active:
+                    self.append_log("Output is no longer empty; refusing to overwrite it.")
+                    return
                 answer = QMessageBox.question(
                     self, "Non-empty output folder",
                     "This folder contains files. Continue? Existing files may be overwritten.",
@@ -282,7 +672,8 @@ class Producer(QMainWindow):
         self.current_output = dest
         self._progress_tail = ""
         self.stage_label.setText("STARTING")
-        self.log.clear()
+        if not self.batch_active:
+            self.log.clear()
         self.append_log(f"Preset: {self.presets.currentData()}\nSource: {source}\nOutput: {dest}\n")
         self.process = QProcess(self)
         self.process.setProgram(str(WRAPPER))
@@ -317,6 +708,9 @@ class Producer(QMainWindow):
             self.stage_label.setText("START FAILED")
             self.process.deleteLater()
             self.process = None
+            if self.batch_active:
+                self.set_batch_label(self.batch_index, "FAILED")
+                QTimer.singleShot(0, self.run_next_batch)
 
     @staticmethod
     def probe_audio(path):
@@ -338,9 +732,27 @@ class Producer(QMainWindow):
 
     def validate_output(self):
         """Check four-stem runs only; do not imply other presets were validated."""
+        if self.presets.currentData() == 'drum-parts':
+            source = Path(self.input.text().strip()).expanduser()
+            expected = ('kick', 'snare', 'toms', 'hh', 'ride', 'crash')
+            paths = [self.current_output / f'{source.stem}_({stem})_MDX23C-DrumSep-aufr33-jarredou.wav' for stem in expected]
+            try:
+                if not all(p.is_file() and p.stat().st_size > 0 for p in paths):
+                    self.append_log('Drum output check FAILED: missing or empty drum stem.')
+                    return False
+                reference = self.probe_audio(source)
+                for path in paths:
+                    info = self.probe_audio(path)
+                    if info['channels'] != reference['channels'] or abs(info['duration'] - reference['duration']) > 0.25:
+                        raise ValueError(f'{path.name}: channels or duration differ from input')
+                self.append_log('Drum output check PASSED: six nonempty WAV stems and metadata verified.')
+                return True
+            except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError) as exc:
+                self.append_log(f'Drum output check FAILED: {exc}')
+                return False
         if self.presets.currentData() not in FOUR_STEM_PRESETS:
             self.append_log("Output check: manual inspection required for this preset.")
-            return True
+            return None
         source = Path(self.input.text().strip()).expanduser()
         output_dir = self.current_output
         model = {"balanced": "htdemucs", "4stems": "hdemucs_mmi", "maximum": "htdemucs_ft"}[self.presets.currentData()]
@@ -377,9 +789,13 @@ class Producer(QMainWindow):
             self.status.setText("CANCELLED")
             self.append_log("Cancelled. Partial output may remain.")
         elif code == 0 and exit_status == QProcess.NormalExit:
-            if self.validate_output():
-                self.status.setText("COMPLETE")
-                self.append_log("Separation finished successfully.")
+            validation = self.validate_output()
+            if validation is True:
+                self.status.setText("VERIFIED")
+                self.append_log("Separation finished successfully; output verified.")
+            elif validation is None:
+                self.status.setText("COMPLETE — UNVERIFIED")
+                self.append_log("Separation exited successfully; inspect this preset's outputs manually.")
             else:
                 self.status.setText("CHECK OUTPUT")
                 self.append_log("Processing exited successfully, but output verification failed.")
@@ -387,26 +803,63 @@ class Producer(QMainWindow):
             self.status.setText("FAILED")
             self.append_log(f"Separation failed (exit code {code}).")
         self.set_running(False)
-        self.stage_label.setText("VERIFIED" if self.status.text() == "COMPLETE" and self.presets.currentData() in FOUR_STEM_PRESETS else self.status.text())
+        self.stage_label.setText("VERIFIED" if self.status.text() == "VERIFIED" and self.presets.currentData() in FOUR_STEM_PRESETS else self.status.text())
         self.process.deleteLater()
         self.process = None
+        if self.batch_active:
+            self.set_batch_label(self.batch_index, self.status.text())
+            if self.cancel_requested:
+                self.batch_active = False
+                self.batch_index = -1
+                self.batch_start_button.setEnabled(True)
+                self.clear_queue_button.setEnabled(True)
+                self.add_files_button.setEnabled(True)
+                self.add_folder_button.setEnabled(True)
+                self.presets.setEnabled(True)
+                self.input.setEnabled(True)
+                self.output.setEnabled(True)
+                self.start_button.setEnabled(True)
+                self.set_running(False)
+                self.unlock_queue_presets()
+            else:
+                QTimer.singleShot(0, self.run_next_batch)
 
     def set_running(self, running):
-        self.start_button.setEnabled(not running)
-        self.cancel_button.setEnabled(running)
-        self.presets.setEnabled(not running)
-        self.input.setEnabled(not running)
-        self.output.setEnabled(not running)
+        self.start_button.setEnabled(not running and not self.batch_active)
+        self.cancel_button.setEnabled((running or self.batch_active) and not self.cancel_requested)
+        self.input_browse.setEnabled(not running and not self.batch_active)
+        self.output_browse.setEnabled(not running and not self.batch_active)
+        self.batch_start_button.setEnabled(not running and not self.batch_active)
+        self.clear_queue_button.setEnabled(not running and not self.batch_active)
+        self.add_files_button.setEnabled(not running and not self.batch_active)
+        self.add_folder_button.setEnabled(not running and not self.batch_active)
+        self.presets.setEnabled(not running and not self.batch_active)
+        self.input.setEnabled(not running and not self.batch_active)
+        self.output.setEnabled(not running and not self.batch_active)
         self.progress.setRange(0, 0 if running else 100)
         if not running:
             self.progress.setValue(0)
 
     def cancel(self):
-        if self.process is None or self.process.state() == QProcess.NotRunning:
+        if self.process is None:
+            if self.batch_active:
+                self.batch_active = False
+                self.batch_index = -1
+                self.status.setText("CANCELLED")
+                self.set_running(False)
+                self.unlock_queue_presets()
             return
         self.cancel_requested = True
+        self.cancel_button.setEnabled(False)
         self.status.setText("CANCELLING")
-        self.process.terminate()
+        process = self.process
+        process.terminate()
+        # Capture this process: a late timer must never kill a subsequent job.
+        QTimer.singleShot(3000, lambda: self.kill_cancelled_process(process))
+
+    def kill_cancelled_process(self, process):
+        if self.process is process and process.state() != QProcess.NotRunning:
+            process.kill()
 
     def open_output(self):
         output_text = self.output.text().strip()
@@ -428,10 +881,13 @@ class Producer(QMainWindow):
             if answer != QMessageBox.Yes:
                 event.ignore()
                 return
+            self.batch_active = False  # Never launch the next job while closing.
+            process = self.process
             self.cancel()
-            if not self.process.waitForFinished(3000):
-                self.process.kill()
-                self.process.waitForFinished(2000)
+            if not process.waitForFinished(3000):
+                process.kill()
+                process.waitForFinished(2000)
+        self.batch_active = False
         event.accept()
 
 

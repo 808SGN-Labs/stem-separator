@@ -404,7 +404,15 @@ The new Qt producer preview is available alongside the legacy Tkinter GUI. From 
 .venv-gui/bin/python gui/producer_qt.py
 ```
 
-The Qt producer preview supports single-file drag and drop, evidence-aligned presets (Balanced by default), an isolated per-track/preset export path, live output and process cancellation. It uses the existing `scripts/stem-separate` backend and shared model cache. The preview is not yet a validated release candidate: test real separation, cancel and Bitwig import locally before publishing. A non-empty export directory requires confirmation; use a fresh directory for reproducible tests.
+The Qt producer preview uses a queue-first interface with a preset per job (Balanced by default), drag-in and button-based file/folder import (top-level audio files only), resolved-path deduplication, per-track/preset export paths, process logs, Copy details, and cancellation. Batch processing skips existing nonempty output paths. Expanded track rows show actual nonempty WAV files from the expected output folder. Four-stem presets validate expected outputs, codec, channels and duration; the Drum Parts preset additionally checks its six expected stems and source-matched channels/duration. Other specialist presets still require manual inspection. The current development tree also contains experimental Qt Multimedia double-click preview, safe file-path context actions, and Qt file-URL drag-out, pending real Linux Mint/Bitwig verification. It uses the existing `scripts/stem-separate` backend and shared model cache.
+
+Offscreen Qt regression tests, using a replacement backend and synthetic WAVs, can be run with:
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv-gui/bin/python tests/test_producer_queue.py -v
+```
+
+These tests require PySide6, Qt Multimedia and `ffprobe`; they do not run separation models. On 13 October 2026, the user reported 11 passing local Qt tests and completed a real three-job CPU batch (Drum Parts, Fast, Balanced), with 14 visible WAV outputs and Verified statuses for the two four-stem jobs. Expandable stem rows were confirmed on the actual desktop. Direct single-stem drag-out from StemLab into Bitwig was subsequently confirmed by the user after a Qt mouse-drag fix. Preview and Source drag-out have since been confirmed working by the user on Linux Mint. Drum Parts synthetic validation and the refreshed local regression suite passed on Linux Mint (16/16 tests in 3.976 seconds). A fresh real Drum Parts validation run remains open. The preview is **not yet a validated release candidate**. Remaining gates include real Bitwig drag/drop, Qt audio playback, cancel/failure/skip scenarios, and output validation. See [Producer Queue UX](docs/PRODUCER-QUEUE-UX.md).
 
 The legacy Tkinter interface remains available at `python3 gui/stem_lab_gui.py` (requires `python3-tk` on some systems).
 
@@ -418,19 +426,7 @@ The legacy Tkinter interface remains available at `python3 gui/stem_lab_gui.py` 
 | Drum Parts | DrumSep | Isolated drum input only |
 | Vocal De-Reverb | BS-RoFormer de-reverb | Isolated vocal input only |
 
-The MVP currently provides:
-
-- audio-file and output-folder selection;
-- automatic preset-specific output folders;
-- all seven separation presets;
-- live process output;
-- a running-state indicator;
-- cancellation of the active separation process;
-- direct access to the output folder;
-- automatic detection of the standard or legacy virtual environment;
-- no shell activation requirement.
-
-Drag-and-drop, detailed progress reporting, hardware-mode display and packaged desktop launchers remain future improvements.
+The legacy Tkinter GUI provides source/output selection and single-job controls. The separate Qt Producer preview is queue-first, with per-job presets, expandable file-based results and a collapsible process log. Preview and single-file Source/Stem drag-out into Bitwig have been confirmed on Linux Mint; these changes remain in the uncommitted development tree. Reliable whole-batch progress/ETA, packaging, queue recovery and release-grade error UX are not complete.
 
 ## Conclusions
 

@@ -88,6 +88,15 @@ models and recipes appropriate to specific producer tasks.
 The public research layer should explain why particular StemLab workflows and
 presets exist.
 
+Producer queue UX / HMI target and implementation gates: [docs/PRODUCER-QUEUE-UX.md](docs/PRODUCER-QUEUE-UX.md).
+
+2026-10-13 update: the user confirmed 11 local Qt regression tests and a
+three-file real CPU batch (Drum Parts, Fast, Balanced). All jobs exited
+successfully; two four-stem jobs were verified and expandable output rows
+showed the actual 14 generated WAV files. Direct single-stem Qt file-URL drag-out to Bitwig was confirmed
+working after a mouse-drag correction. Preview and source drag-out were subsequently confirmed by the user on Linux Mint. Synthetic Drum Parts output validation and refreshed local Qt regression passed (16/16 tests on 2026-10-13). Fresh real Drum Parts validation remains open. Cancel/failure/skip acceptance and release packaging
+are still open. See `docs/PRODUCER-QUEUE-UX.md`. No release-readiness claim.
+
 ## January 2027 — Producer GUI Alpha
 
 - [ ] PySide6 / Qt producer interface
