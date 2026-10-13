@@ -578,6 +578,30 @@ class Producer(QMainWindow):
         self.set_running(False)
         QTimer.singleShot(0, self.run_next_batch)
 
+    def inspect_existing_output(self, index):
+        """Classify an output directory without deleting or modifying files."""
+        source = self.batch_paths[index]
+        directory = self.stem_output_dir(index)
+        if not source.is_file():
+            return 'MISSING SOURCE'
+        try:
+            if not directory.exists():
+                return 'READY'
+            if not directory.is_dir():
+                return 'BLOCKED'
+            entries = list(directory.iterdir())
+            if not entries:
+                return 'READY'
+            if self.batch_presets[index] in FOUR_STEM_PRESETS:
+                model = {'balanced': 'htdemucs', '4stems': 'hdemucs_mmi', 'maximum': 'htdemucs_ft'}[self.batch_presets[index]]
+                expected = [directory / f'{source.stem}_({stem})_{model}.wav'
+                            for stem in ('Bass', 'Drums', 'Other', 'Vocals')]
+                if len(entries) == 4 and all(p.is_file() and p.stat().st_size > 0 for p in expected):
+                    return 'EXISTING STEMS'
+            return 'PARTIAL / UNKNOWN'
+        except OSError:
+            return 'BLOCKED'
+
     def run_next_batch(self):
         if not self.batch_active:
             return
@@ -600,18 +624,10 @@ class Producer(QMainWindow):
         source = self.batch_paths[self.batch_index]
         preset = self.batch_presets[self.batch_index]
         target = self.stem_output_dir(self.batch_index)
-        try:
-            skip = not source.is_file() or (
-                target.exists() and (not target.is_dir() or any(target.iterdir()))
-            )
-        except OSError as error:
-            self.set_batch_label(self.batch_index, "FAILED")
-            self.append_log(f"Cannot inspect output for {source.name}: {error}")
-            QTimer.singleShot(0, self.run_next_batch)
-            return
-        if skip:
-            self.set_batch_label(self.batch_index, "SKIPPED")
-            self.append_log(f"Skipped {source.name}: missing source or output path is not an empty directory.")
+        existing = self.inspect_existing_output(self.batch_index)
+        if existing != 'READY':
+            self.set_batch_label(self.batch_index, existing)
+            self.append_log(f'Skipped {source.name}: {existing.lower()}; existing output was not changed.')
             QTimer.singleShot(0, self.run_next_batch)
             return
         self.set_batch_label(self.batch_index, "PROCESSING")

@@ -200,6 +200,13 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Recovery classification prototype (uncommitted)
+
+- `inspect_existing_output` distinguishes missing source, empty destination (READY), directory/file conflicts (BLOCKED), incomplete/unknown data, and four expected nonempty WAVs (EXISTING STEMS).
+- An output marked EXISTING STEMS is **not** audio-metadata verified merely by filename/size; future recovery must re-probe audio before showing Verified.
+- Existing or partial outputs are skipped without modifying data; no automatic retry, overwrite, cleanup or persistent queue restore.
+- Synthetic tests cover interrupted/empty/complete-looking/zero-byte outputs and no-overwrite behavior. They still need to run on Linux Mint.
+
 ## Post-alpha hardening (uncommitted)
 
 - Fixed cancellation during the queued-but-not-started interval: release Add/Clear/Start controls and preset combos, retain `CANCELLED` status, and prevent the scheduled next job from starting.

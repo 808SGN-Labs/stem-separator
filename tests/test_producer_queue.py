@@ -48,6 +48,28 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(parent.child(0).text(0), 'Vocals')
         self.assertEqual(parent.child(0).data(0, m.Qt.UserRole), str(target / 'Vocals.wav'))
 
+    def test_recovery_classifies_existing_outputs_without_overwrite(self):
+        source = self.audio('recovery.wav')
+        self.w.add_paths([str(source)])
+        target = self.root / 'recovery_stemlab' / 'balanced'
+        self.assertEqual(self.w.inspect_existing_output(0), 'READY')
+        target.mkdir(parents=True)
+        self.assertEqual(self.w.inspect_existing_output(0), 'READY')
+        paths = [target / f'recovery_({stem})_htdemucs.wav' for stem in ('Bass', 'Drums', 'Other', 'Vocals')]
+        for p in paths[:3]:
+            p.write_bytes(b'fixture')
+        self.assertEqual(self.w.inspect_existing_output(0), 'PARTIAL / UNKNOWN')
+        paths[3].write_bytes(b'fixture')
+        self.assertEqual(self.w.inspect_existing_output(0), 'EXISTING STEMS')
+        paths[0].write_bytes(b'')
+        self.assertEqual(self.w.inspect_existing_output(0), 'PARTIAL / UNKNOWN')
+        paths[0].write_bytes(b'preserve')
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(paths[0].read_bytes(), b'preserve')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Existing Stems')
+        self.assertFalse((target / 'called').exists())
+
     def test_source_row_exposes_drag_path(self):
         source = self.audio('source.wav')
         self.w.add_paths([str(source)])
@@ -136,7 +158,7 @@ class QueueTests(unittest.TestCase):
         target=self.root/'a_stemlab/balanced';target.parent.mkdir();target.write_text('preserve')
         self.w.start_batch();self.wait_done()
         self.assertEqual(target.read_text(),'preserve')
-        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Skipped')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Blocked')
     def test_legacy_mode_display(self):
         self.w.set_input(str(self.audio('a.wav')))
         self.w.presets.setCurrentIndex(self.w.presets.findData('maximum'))
