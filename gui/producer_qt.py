@@ -462,6 +462,7 @@ class Producer(QMainWindow):
         self.queue_list.setItemWidget(item, 1, mode)
         item.setSizeHint(0, mode.sizeHint())
         self.refresh_stem_children(index)
+        self.refresh_existing_status(index)
 
     def on_queue_expanded(self, item):
         index = self.queue_list.indexOfTopLevelItem(item)
@@ -531,6 +532,7 @@ class Producer(QMainWindow):
         if not self.batch_active and 0 <= index < len(self.batch_presets):
             self.batch_presets[index] = preset
             self.refresh_stem_children(index)
+            self.refresh_existing_status(index)
 
     def clear_batch(self):
         if self.batch_active:
@@ -601,6 +603,29 @@ class Producer(QMainWindow):
             return 'PARTIAL / UNKNOWN'
         except OSError:
             return 'BLOCKED'
+
+    def refresh_existing_status(self, index):
+        """Inspect existing results on import/preset change, without processing."""
+        state = self.inspect_existing_output(index)
+        if state == 'EXISTING STEMS':
+            source = self.batch_paths[index]
+            directory = self.stem_output_dir(index)
+            model = {'balanced': 'htdemucs', '4stems': 'hdemucs_mmi', 'maximum': 'htdemucs_ft'}[self.batch_presets[index]]
+            try:
+                reference = self.probe_audio(source)
+                for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+                    info = self.probe_audio(directory / f'{source.stem}_({stem})_{model}.wav')
+                    if (info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le')
+                            or info['channels'] != reference['channels']
+                            or abs(info['duration'] - reference['duration']) > 0.25):
+                        raise ValueError('incompatible WAV metadata')
+                state = 'VERIFIED EXISTING'
+            except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError):
+                state = 'PARTIAL / UNKNOWN'
+        if state == 'READY':
+            state = 'QUEUED'
+        self.set_batch_label(index, state)
+        return state
 
     def run_next_batch(self):
         if not self.batch_active:

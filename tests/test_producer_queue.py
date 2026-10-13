@@ -70,6 +70,26 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Existing Stems')
         self.assertFalse((target / 'called').exists())
 
+    def test_reimport_verifies_existing_wavs_without_processing(self):
+        import wave
+        source = self.root / 'existing.wav'
+        def wav(path, frames=44100):
+            with wave.open(str(path), 'wb') as f:
+                f.setnchannels(2); f.setsampwidth(2); f.setframerate(44100)
+                f.writeframes(b'\0' * frames * 4)
+        wav(source)
+        directory = self.root / 'existing_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        stems = [directory / f'existing_({name})_htdemucs.wav' for name in ('Bass','Drums','Other','Vocals')]
+        for path in stems: wav(path)
+        self.w.add_paths([str(source)])
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Verified Existing')
+        self.assertFalse((directory / 'called').exists())
+        wav(stems[0], frames=100)
+        self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
+        self.assertFalse((directory / 'called').exists())
+
     def test_source_row_exposes_drag_path(self):
         source = self.audio('source.wav')
         self.w.add_paths([str(source)])

@@ -200,6 +200,13 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Existing-output verification on re-import (uncommitted)
+
+- Importing a source or changing its per-row preset now inspects the matching output directory without launching separation.
+- Four expected nonempty WAVs are probed using ffprobe; supported PCM codec, source-matching channel count and duration within 0.25 seconds lead to `Verified Existing`. Invalid/incomplete outputs show `Partial / Unknown` and remain untouched.
+- Missing or empty output folders remain `Queued`. This is deliberately read-only, synchronous inspection and not persistent queue history.
+- Added a synthetic 44.1-kHz stereo WAV test for valid re-import and duration mismatch. Local regression run is still pending.
+
 ## Recovery classification prototype (uncommitted)
 
 - `inspect_existing_output` distinguishes missing source, empty destination (READY), directory/file conflicts (BLOCKED), incomplete/unknown data, and four expected nonempty WAVs (EXISTING STEMS).
