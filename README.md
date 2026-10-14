@@ -120,6 +120,29 @@ still requires the CLI backend from `scripts/install.sh` or an existing
 installer or verified distributable**. No system-wide files are installed by
 the launcher.
 
+### Linux Mint application menu (source checkout)
+
+After verifying `bash scripts/stemlab-gui`, register a per-user application
+shortcut with no root access:
+
+```bash
+bash -n scripts/install-desktop.sh
+bash scripts/install-desktop.sh
+python3 -m unittest discover -s tests -p 'test_desktop_installer.py' -v
+```
+
+The desktop installer refuses to replace foreign application entries or
+symlinked entries. Its test suite uses an isolated temporary XDG data directory,
+so it does not change the real application menu.
+
+The menu entry launches the current checkout using an absolute path; moving the
+checkout requires reinstalling the entry. It does not bundle Python, models or
+separation dependencies. Remove only the matching StemLab-generated shortcut:
+
+```bash
+bash scripts/install-desktop.sh --remove
+```
+
 ## Manual installation (advanced)
 
 The quick-start installer above is recommended. If you use the manual location below, set `STEM_LAB_VENV` so the wrapper can find it. Export this variable again in each new terminal session before using the wrapper.
