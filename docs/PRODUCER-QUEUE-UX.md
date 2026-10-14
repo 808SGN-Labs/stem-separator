@@ -200,6 +200,14 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Linux packaging preflight (pending local validation)
+
+- Audit confirmed `scripts/install.sh` provisions the CLI backend, not PySide6.
+- Added `scripts/stemlab-gui`, a source-checkout launcher using `.venv-gui/bin/python` or `STEM_LAB_GUI_PYTHON`.
+- Launcher checks QtWidgets/QtMultimedia, `ffprobe` and the executable separation wrapper; no `sudo`, no auto-install, no existing output changes.
+- Run with `bash scripts/stemlab-gui` (file executable bit is not assumed). Full install packaging and desktop integration are not yet implemented.
+- Validate launcher on Linux Mint and its failure messages before declaring the packaging baseline accepted.
+
 ## Multi-file queue acceptance (pending local regression and desktop review)
 
 - Added a synthetic three-file Queue UI regression: queued, metadata-verified existing WAVs, and partial output in the same tree.

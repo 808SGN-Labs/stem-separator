@@ -100,6 +100,26 @@ Suno can export native stems, and commercial services such as Voice.ai can separ
 
 The timings below are therefore conservative. A supported NVIDIA GPU should be substantially faster.
 
+## Producer GUI (Linux source checkout)
+
+The existing `scripts/install.sh` installs the **separation CLI backend only**. The
+producer GUI requires a separate Python environment with PySide6 (QtWidgets and
+QtMultimedia). For a local Linux checkout:
+
+```bash
+python3 -m venv .venv-gui
+.venv-gui/bin/python -m pip install PySide6
+bash scripts/stemlab-gui
+```
+
+The launcher checks its Python environment, Qt Multimedia, `ffprobe`, and
+the separation wrapper before starting. Override the GUI Python interpreter
+with `STEM_LAB_GUI_PYTHON=/path/to/python` if needed. Actual stem processing
+still requires the CLI backend from `scripts/install.sh` or an existing
+`STEM_LAB_VENV`. This is a source-checkout launcher, **not a packaged Linux
+installer or verified distributable**. No system-wide files are installed by
+the launcher.
+
 ## Manual installation (advanced)
 
 The quick-start installer above is recommended. If you use the manual location below, set `STEM_LAB_VENV` so the wrapper can find it. Export this variable again in each new terminal session before using the wrapper.

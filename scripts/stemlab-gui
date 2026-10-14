@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# StemLab Producer GUI launcher (Linux, source checkout).
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+PYTHON="${STEM_LAB_GUI_PYTHON:-$ROOT/.venv-gui/bin/python}"
+WRAPPER="$ROOT/scripts/stem-separate"
+
+if [[ ! -x "$PYTHON" ]]; then
+  echo "StemLab GUI Python not found: $PYTHON" >&2
+  echo "Create .venv-gui and install PySide6, or set STEM_LAB_GUI_PYTHON." >&2
+  exit 1
+fi
+
+if [[ ! -x "$WRAPPER" ]]; then
+  echo "StemLab separation wrapper not executable: $WRAPPER" >&2
+  exit 1
+fi
+
+if ! command -v ffprobe >/dev/null 2>&1; then
+  echo "ffprobe is required (install ffmpeg)." >&2
+  exit 1
+fi
+
+if ! "$PYTHON" -c 'from PySide6.QtWidgets import QApplication; from PySide6.QtMultimedia import QMediaPlayer' >/dev/null 2>&1; then
+  echo "PySide6 QtWidgets/QtMultimedia unavailable in $PYTHON" >&2
+  exit 1
+fi
+
+exec "$PYTHON" "$ROOT/gui/producer_qt.py" "$@"
