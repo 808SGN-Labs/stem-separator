@@ -38,6 +38,11 @@ class QueueTests(unittest.TestCase):
         self.tmp.cleanup()
     def audio(self, name):
         p=self.root/name; p.write_bytes(b'fixture'); return p
+    def wav(self, path, frames=44100, rate=44100):
+        with wave.open(str(path), 'wb') as out:
+            out.setnchannels(2); out.setsampwidth(2); out.setframerate(rate)
+            out.writeframes(b'\0' * frames * 4)
+        return path
     def backend_calls(self):
         log = self.root / 'backend_calls'
         return [line.split('\t') for line in log.read_text().splitlines()] if log.exists() else []
@@ -48,8 +53,8 @@ class QueueTests(unittest.TestCase):
         while self.w.batch_active and time.monotonic()<deadline:
             app.processEvents(); time.sleep(.005)
         self.assertFalse(self.w.batch_active)
-    def test_expandable_stems_show_real_wavs_only(self):
-        source = self.audio('song.wav')
+    def test_unrelated_wavs_are_not_listed_as_supported_stems(self):
+        source = self.wav(self.root / 'song.wav')
         self.w.add_paths([str(source)])
         target = self.root / 'song_stemlab' / 'balanced'
         target.mkdir(parents=True)
@@ -59,9 +64,35 @@ class QueueTests(unittest.TestCase):
         (target / 'notes.txt').write_text('not a stem')
         self.w.refresh_stem_children(0)
         parent = self.w.queue_list.topLevelItem(0)
-        self.assertEqual(parent.childCount(), 1)
-        self.assertEqual(parent.child(0).text(0), 'Vocals')
-        self.assertEqual(parent.child(0).data(0, m.Qt.UserRole), str(target / 'Vocals.wav'))
+        self.assertEqual(parent.childCount(), 0)
+
+    def test_partial_and_invalid_stems_are_not_ready_or_exportable(self):
+        source = self.wav(self.root / 'unsafe.wav')
+        self.w.add_paths([str(source)])
+        target = self.w.stem_output_dir(0)
+        target.mkdir(parents=True)
+        self.mark_owned(target, source)
+        (target / 'junk.wav').write_bytes(b'not audio')
+        (target / 'unsafe_(Bass)_htdemucs.wav').write_bytes(b'malformed WAV')
+        (target / 'unsafe_(Drums)_htdemucs.wav').touch()
+        self.w.refresh_existing_status(0)
+        parent = self.w.queue_list.topLevelItem(0)
+        self.assertEqual(parent.text(2), 'Partial / Unknown')
+        self.assertEqual({parent.child(i).text(0) for i in range(parent.childCount())},
+                         {'Bass', 'Drums'})
+        self.assertTrue(all(parent.child(i).text(2) == 'Unverified'
+                            for i in range(parent.childCount())))
+        child = parent.child(0)
+        with patch.object(self.w.preview_player, 'setSource') as preview, \
+                patch.object(m, 'QMenu') as menu, patch.object(m, 'QDrag') as drag, \
+                patch.object(self.w.queue_list, 'itemAt', return_value=child):
+            self.w.preview_stem_item(child)
+            self.w.stem_context_menu(self.w.queue_list.visualItemRect(child).center())
+            self.w.queue_list.setCurrentItem(child)
+            self.w.queue_list.startDrag(m.Qt.CopyAction)
+        preview.assert_not_called()
+        menu.assert_not_called()
+        drag.assert_not_called()
 
     def test_recovery_classifies_existing_outputs_without_overwrite(self):
         source = self.audio('recovery.wav')
@@ -101,11 +132,81 @@ class QueueTests(unittest.TestCase):
         for path in stems: wav(path)
         self.w.add_paths([str(source)])
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Verified Existing')
+        parent = self.w.queue_list.topLevelItem(0)
+        self.assertEqual([parent.child(i).text(2) for i in range(parent.childCount())], ['Ready'] * 4)
+        child = parent.child(0)
+        with patch.object(self.w.preview_player, 'setSource') as preview, \
+                patch.object(m, 'QMenu') as menu, patch.object(m, 'QDrag') as drag, \
+                patch.object(self.w.queue_list, 'itemAt', return_value=child):
+            self.w.preview_stem_item(child)
+            self.w.stem_context_menu(self.w.queue_list.visualItemRect(child).center())
+            self.w.queue_list.setCurrentItem(child)
+            self.w.queue_list.startDrag(m.Qt.CopyAction)
+        preview.assert_called_once()
+        menu.return_value.exec.assert_called_once()
+        drag.assert_called_once()
+        self.assertEqual(drag.return_value.setMimeData.call_args.args[0].urls()[0].toLocalFile(),
+                         str(stems[0]))
         self.assertFalse((directory / 'called').exists())
         wav(stems[0], frames=100)
         self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
+        self.assertTrue(all(parent.child(i).text(2) == 'Unverified' for i in range(parent.childCount())))
         self.assertFalse((directory / 'called').exists())
+
+    def test_changed_or_malformed_wav_loses_readiness_before_export(self):
+        source = self.wav(self.root / 'changed.wav')
+        directory = self.root / 'changed_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        stems = [self.wav(directory / f'changed_({name})_htdemucs.wav')
+                 for name in ('Bass', 'Drums', 'Other', 'Vocals')]
+        self.w.add_paths([str(source)])
+        parent = self.w.queue_list.topLevelItem(0)
+        self.assertEqual(parent.text(2), 'Verified Existing')
+        for payload in (b'not a WAV', b'RIFF\0\0\0\0WAVE', b''):
+            stems[0].write_bytes(payload)
+            child = parent.child(0)
+            with patch.object(self.w.preview_player, 'setSource') as preview, \
+                    patch.object(m, 'QDrag') as drag:
+                self.w.preview_stem_item(child)
+                self.w.queue_list.setCurrentItem(child)
+                self.w.queue_list.startDrag(m.Qt.CopyAction)
+            preview.assert_not_called()
+            drag.assert_not_called()
+            self.w.refresh_stem_children(0)
+            self.assertTrue(all(parent.child(i).text(2) == 'Unverified'
+                                for i in range(parent.childCount())))
+            self.wav(stems[0])
+            self.w.refresh_stem_children(0)
+
+    def test_preset_change_and_unvalidated_preset_never_mark_ready(self):
+        source = self.wav(self.root / 'modes.wav')
+        self.w.add_paths([str(source)])
+        combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1)
+        combo.setCurrentIndex(combo.findData('vocals'))
+        directory = self.w.stem_output_dir(0)
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source, 'vocals')
+        self.wav(directory / 'modes_(Vocals)_model.wav')
+        self.w.set_batch_label(0, 'COMPLETE — UNVERIFIED')
+        parent = self.w.queue_list.topLevelItem(0)
+        self.assertEqual(parent.childCount(), 1)
+        self.assertEqual(parent.child(0).text(2), 'Unverified')
+        self.assertEqual(self.w.refresh_existing_status(0), 'UNVERIFIED')
+        self.assertEqual(parent.text(2), 'Unverified')
+        with patch.object(m, 'QDrag') as drag:
+            self.w.queue_list.setCurrentItem(parent.child(0))
+            self.w.queue_list.startDrag(m.Qt.CopyAction)
+        drag.assert_not_called()
+        old_child = parent.child(0)
+        combo.setCurrentIndex(combo.findData('balanced'))
+        self.assertEqual(parent.childCount(), 0)
+        with patch.object(self.w.preview_player, 'setSource') as preview, patch.object(m, 'QDrag') as drag:
+            self.w.preview_stem_item(old_child)
+            self.w.queue_list.drag_stem(old_child)
+        preview.assert_not_called()
+        drag.assert_not_called()
 
     def test_multifile_queue_expansion_and_mixed_statuses(self):
         import wave
@@ -152,6 +253,52 @@ class QueueTests(unittest.TestCase):
         parent = self.w.queue_list.topLevelItem(0)
         self.assertEqual(parent.data(0, m.Qt.UserRole), str(source.resolve()))
         self.assertTrue(source.is_file())
+        with patch.object(m, 'QDrag') as drag:
+            self.w.queue_list.setCurrentItem(parent)
+            self.w.queue_list.startDrag(m.Qt.CopyAction)
+        drag.assert_called_once()
+        self.assertEqual(drag.return_value.setMimeData.call_args.args[0].urls()[0].toLocalFile(),
+                         str(source))
+
+    def test_drum_parts_reimport_requires_all_six_valid_stems(self):
+        source = self.wav(self.root / 'drums.wav')
+        self.w.add_paths([str(source)])
+        combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1)
+        combo.setCurrentIndex(combo.findData('drum-parts'))
+        target = self.w.stem_output_dir(0)
+        target.mkdir(parents=True)
+        self.mark_owned(target, source, 'drum-parts')
+        paths = [self.wav(target / f'drums_({name})_MDX23C-DrumSep-aufr33-jarredou.wav')
+                 for name in ('kick', 'snare', 'toms', 'hh', 'ride', 'crash')]
+        self.assertEqual(self.w.refresh_existing_status(0), 'VERIFIED EXISTING')
+        parent = self.w.queue_list.topLevelItem(0)
+        self.assertEqual([parent.child(i).text(2) for i in range(6)], ['Ready'] * 6)
+        paths[0].write_bytes(b'broken')
+        self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
+        self.assertTrue(all(parent.child(i).text(2) == 'Unverified' for i in range(6)))
+
+    def test_four_stem_rate_matches_backend_output_not_source(self):
+        source = self.wav(self.root / 'rate.wav', frames=48000, rate=48000)
+        self.w.add_paths([str(source)])
+        combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1)
+        self.w.set_input(str(source))
+        for preset, model in m.FOUR_STEM_MODELS.items():
+            with self.subTest(preset=preset):
+                combo.setCurrentIndex(combo.findData(preset))
+                self.w.presets.setCurrentIndex(self.w.presets.findData(preset))
+                target = self.w.stem_output_dir(0)
+                target.mkdir(parents=True)
+                self.mark_owned(target, source, preset)
+                paths = [self.wav(target / f'rate_({name})_{model}.wav')
+                         for name in ('Bass', 'Drums', 'Other', 'Vocals')]
+                self.assertEqual(self.w.refresh_existing_status(0), 'VERIFIED EXISTING')
+                self.w.current_output = target
+                self.assertTrue(self.w.validate_output())
+                self.wav(paths[0], frames=48000, rate=48000)
+                self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
+                self.assertFalse(self.w.validate_output())
+                self.assertTrue(all(self.w.queue_list.topLevelItem(0).child(i).text(2) == 'Unverified'
+                                    for i in range(4)))
 
     def test_stem_labels_preserve_original_files(self):
         p = Path('3_(kick)_MDX23C-DrumSep-aufr33-jarredou.wav')
@@ -470,10 +617,18 @@ class QueueTests(unittest.TestCase):
         self.w.cancel();app.processEvents()
         self.assertIsNone(self.w.process)
     def test_failure_continues(self):
-        self.backend.write_text('#!/bin/sh\nexit 7\n')
+        self.backend.write_text('#!/usr/bin/env python3\nimport sys,wave\nfrom pathlib import Path\np=Path(sys.argv[3]);p.mkdir(parents=True,exist_ok=True)\nwith wave.open(str(p/(Path(sys.argv[2]).stem+"_(Bass)_htdemucs.wav")),"wb") as out:\n out.setnchannels(2);out.setsampwidth(2);out.setframerate(44100);out.writeframes(b"\\0"*44100*4)\nsys.exit(7)\n')
         self.w.add_paths([str(self.audio('a.wav')),str(self.audio('b.wav'))])
         self.w.start_batch();self.wait_done()
         self.assertEqual([self.w.queue_list.topLevelItem(i).text(2) for i in range(2)],['Failed','Failed'])
+        for i in range(2):
+            parent = self.w.queue_list.topLevelItem(i)
+            self.assertEqual(parent.childCount(), 1)
+            self.assertEqual(parent.child(0).text(2), 'Unverified')
+            with patch.object(m, 'QDrag') as drag:
+                self.w.queue_list.setCurrentItem(parent.child(0))
+                self.w.queue_list.startDrag(m.Qt.CopyAction)
+            drag.assert_not_called()
     def test_cancel_between_jobs_restores_queue_controls(self):
         self.w.add_paths([str(self.audio('a.wav')), str(self.audio('b.wav'))])
         self.w.start_batch()
@@ -491,7 +646,7 @@ class QueueTests(unittest.TestCase):
         self.assertFalse((self.root / 'a_stemlab').exists())
 
     def test_cancel_kills_stubborn_process(self):
-        self.backend.write_text('#!/usr/bin/env python3\nimport signal,time\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nprint("ready",flush=True)\ntime.sleep(30)\n')
+        self.backend.write_text('#!/usr/bin/env python3\nimport signal,time,sys,wave\nfrom pathlib import Path\np=Path(sys.argv[3]);p.mkdir(parents=True,exist_ok=True)\nwith wave.open(str(p/"a_(Bass)_htdemucs.wav"),"wb") as out:\n out.setnchannels(2);out.setsampwidth(2);out.setframerate(44100);out.writeframes(b"\\0"*44100*4)\nsignal.signal(signal.SIGTERM,signal.SIG_IGN)\nprint("ready",flush=True)\ntime.sleep(30)\n')
         self.w.add_paths([str(self.audio('a.wav')),str(self.audio('b.wav'))])
         self.w.start_batch()
         end=time.monotonic()+3
@@ -500,6 +655,12 @@ class QueueTests(unittest.TestCase):
         self.assertIn('ready',self.w.log.toPlainText())
         self.w.cancel();self.wait_done()
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Cancelled')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).childCount(), 1)
+        self.assertEqual(self.w.queue_list.topLevelItem(0).child(0).text(2), 'Unverified')
+        with patch.object(m, 'QDrag') as drag:
+            self.w.queue_list.setCurrentItem(self.w.queue_list.topLevelItem(0).child(0))
+            self.w.queue_list.startDrag(m.Qt.CopyAction)
+        drag.assert_not_called()
         self.assertFalse((self.root/'b_stemlab').exists())
     def test_validation_rejects_missing_output(self):
         self.w.set_input(str(self.audio('a.wav')))

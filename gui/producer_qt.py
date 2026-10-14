@@ -2,6 +2,7 @@
 """StemLab producer interface — local Qt frontend for scripts/stem-separate."""
 
 import json
+import math
 import os
 import re
 import subprocess
@@ -22,6 +23,9 @@ WRAPPER = ROOT / "scripts" / "stem-separate"
 # tqdm reports per-model steps, not overall job completion.
 STEP_PROGRESS = re.compile(r"(\d{1,3})%\|[^\r\n]*?\|\s*(\d+)\s*/\s*(\d+)")
 FOUR_STEM_PRESETS = {"balanced", "4stems", "maximum"}
+FOUR_STEM_MODELS = {"balanced": "htdemucs", "4stems": "hdemucs_mmi", "maximum": "htdemucs_ft"}
+# The wrapper leaves audio-separator's --sample_rate at its 44.1 kHz default.
+FOUR_STEM_OUTPUT_RATE = 44100
 AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg", ".aiff", ".aif"}
 OWNER_FILE = ".stemlab-source.json"
 
@@ -149,7 +153,7 @@ class QueueList(QTreeWidget):
             item = self.itemAt(origin)
             path = item.data(0, Qt.UserRole) if item else None
             if path and Path(path).is_file():
-                self.drag_stem(path)
+                self.drag_stem(item)
                 return
         super().mouseMoveEvent(event)
 
@@ -157,7 +161,12 @@ class QueueList(QTreeWidget):
         self._drag_origin = None
         super().mouseReleaseEvent(event)
 
-    def drag_stem(self, path):
+    def drag_stem(self, item):
+        path = item.data(0, Qt.UserRole) if item else None
+        if not path or not Path(path).is_file():
+            return
+        if not self.can_export_item or not self.can_export_item(item):
+            return
         mime = QMimeData()
         mime.setUrls([QUrl.fromLocalFile(str(path))])
         drag = QDrag(self)
@@ -166,12 +175,12 @@ class QueueList(QTreeWidget):
 
     def startDrag(self, supported_actions):
         item = self.currentItem()
-        path = item.data(0, Qt.UserRole) if item else None
-        if path and Path(path).is_file():
-            self.drag_stem(path)
+        if item:
+            self.drag_stem(item)
 
     def __init__(self):
         super().__init__()
+        self.can_export_item = None
         self.setAcceptDrops(True)
         self.setDragDropMode(QTreeWidget.DragDrop)
         self.setDragEnabled(True)
@@ -317,6 +326,7 @@ class Producer(QMainWindow):
         drop_hint.setObjectName("queueHint")
         queue_box.addWidget(drop_hint)
         self.queue_list = QueueList()
+        self.queue_list.can_export_item = self.stem_export_allowed
         self.queue_list.pathsDropped.connect(self.add_paths)
         self.queue_list.itemExpanded.connect(self.on_queue_expanded)
         self.queue_list.itemDoubleClicked.connect(self.preview_stem_item)
@@ -577,9 +587,9 @@ class Producer(QMainWindow):
         return match.group(1).replace('_', ' ').title() if match else path.stem
 
     def preview_stem_item(self, item, column=0):
-        path = item.data(0, Qt.UserRole)
-        if not path or not Path(path).is_file():
+        if not self.stem_export_allowed(item):
             return
+        path = item.data(0, Qt.UserRole)
         url = QUrl.fromLocalFile(path)
         if self.preview_player.source() == url and self.preview_player.playbackState() == QMediaPlayer.PlayingState:
             self.preview_player.stop()
@@ -591,9 +601,9 @@ class Producer(QMainWindow):
 
     def stem_context_menu(self, point):
         item = self.queue_list.itemAt(point)
-        path = item.data(0, Qt.UserRole) if item else None
-        if not path or not Path(path).is_file():
+        if not self.stem_export_allowed(item):
             return
+        path = item.data(0, Qt.UserRole)
         menu = QMenu(self)
         menu.addAction('Play / Stop preview', lambda: self.preview_stem_item(item))
         menu.addAction('Copy file path', lambda: QApplication.clipboard().setText(path))
@@ -631,6 +641,63 @@ class Producer(QMainWindow):
         # Legacy output has no reliable record of which source created it.
         return bool(entries)
 
+    @staticmethod
+    def expected_stem_paths(source, preset, directory):
+        if preset in FOUR_STEM_PRESETS:
+            model = FOUR_STEM_MODELS[preset]
+            names = ('Bass', 'Drums', 'Other', 'Vocals')
+        elif preset == 'drum-parts':
+            model = 'MDX23C-DrumSep-aufr33-jarredou'
+            names = ('kick', 'snare', 'toms', 'hh', 'ride', 'crash')
+        else:
+            return None
+        return {name: directory / f'{source.stem}_({name})_{model}.wav' for name in names}
+
+    def verified_stem_paths(self, source, preset, directory):
+        paths = self.expected_stem_paths(source, preset, directory)
+        if paths is None:
+            return None
+        try:
+            if not all(path.is_file() and not path.is_symlink() and path.stat().st_size > 0
+                       for path in paths.values()):
+                return None
+            reference = self.probe_audio(source)
+            if (reference['channels'] < 1 or reference['rate'] < 1
+                    or not math.isfinite(reference['duration']) or reference['duration'] <= 0):
+                return None
+            for path in paths.values():
+                info = self.probe_audio(path)
+                if (info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le')
+                        or info['channels'] != reference['channels']
+                        or not math.isfinite(info['duration']) or info['duration'] <= 0
+                        or abs(info['duration'] - reference['duration']) > 0.25
+                        or info['rate'] != (FOUR_STEM_OUTPUT_RATE if preset in FOUR_STEM_PRESETS
+                                            else reference['rate'])):
+                    return None
+            return paths
+        except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError, IndexError):
+            return None
+
+    def stem_export_allowed(self, item):
+        path = item.data(0, Qt.UserRole) if item else None
+        if not path or not Path(path).is_file():
+            return False
+        parent = item.parent()
+        if parent is None:
+            index = self.queue_list.indexOfTopLevelItem(item)
+            return index >= 0 and Path(path) == self.batch_paths[index]  # Original source drag-out.
+        index = self.queue_list.indexOfTopLevelItem(parent)
+        if index < 0 or parent.data(2, Qt.UserRole) not in ('VERIFIED', 'VERIFIED EXISTING'):
+            return False
+        directory = self.stem_output_dir(index)
+        try:
+            if self.output_conflicts_with_source(index, directory, list(directory.iterdir())):
+                return False
+        except OSError:
+            return False
+        paths = self.verified_stem_paths(self.batch_paths[index], self.batch_presets[index], directory)
+        return bool(paths and Path(path) in paths.values())
+
     def refresh_stem_children(self, index):
         if not 0 <= index < len(self.batch_paths):
             return
@@ -641,14 +708,22 @@ class Producer(QMainWindow):
         if self.inspect_existing_output(index) == 'SOURCE CONFLICT':
             parent.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless)
             return
+        source = self.batch_paths[index]
+        preset = self.batch_presets[index]
+        expected = self.expected_stem_paths(source, preset, directory)
         try:
-            stems = sorted((p for p in directory.iterdir()
-                            if p.is_file() and p.suffix.lower() == ".wav" and p.stat().st_size > 0),
-                           key=lambda p: p.name.casefold()) if directory.is_dir() else []
+            if expected is not None:
+                stems = [path for path in expected.values() if path.is_file()]
+            else:
+                stems = sorted((p for p in directory.iterdir()
+                                if p.is_file() and p.suffix.lower() == ".wav"),
+                               key=lambda p: p.name.casefold()) if directory.is_dir() else []
         except OSError:
             stems = []
+        ready = (parent.data(2, Qt.UserRole) in ('VERIFIED', 'VERIFIED EXISTING')
+                 and self.verified_stem_paths(source, preset, directory) is not None)
         for path in stems:
-            child = QTreeWidgetItem([self.stem_display_name(path), "", "Ready"])
+            child = QTreeWidgetItem([self.stem_display_name(path), "", "Ready" if ready else "Unverified"])
             child.setToolTip(0, str(path))
             child.setData(0, Qt.UserRole, str(path))
             parent.addChild(child)
@@ -760,12 +835,10 @@ class Producer(QMainWindow):
             entries = [entry for entry in entries if entry.name != OWNER_FILE]
             if not entries:
                 return 'READY'
-            if self.batch_presets[index] in FOUR_STEM_PRESETS:
-                model = {'balanced': 'htdemucs', '4stems': 'hdemucs_mmi', 'maximum': 'htdemucs_ft'}[self.batch_presets[index]]
-                expected = [directory / f'{source.stem}_({stem})_{model}.wav'
-                            for stem in ('Bass', 'Drums', 'Other', 'Vocals')]
-                if len(entries) == 4 and all(p.is_file() and p.stat().st_size > 0 for p in expected):
-                    return 'EXISTING STEMS'
+            expected = self.expected_stem_paths(source, self.batch_presets[index], directory)
+            if expected is not None and len(entries) == len(expected) and all(
+                    p.is_file() and p.stat().st_size > 0 for p in expected.values()):
+                return 'EXISTING STEMS'
             return 'PARTIAL / UNKNOWN'
         except OSError:
             return 'BLOCKED'
@@ -774,20 +847,12 @@ class Producer(QMainWindow):
         """Inspect existing results on import/preset change, without processing."""
         state = self.inspect_existing_output(index)
         if state == 'EXISTING STEMS':
-            source = self.batch_paths[index]
-            directory = self.stem_output_dir(index)
-            model = {'balanced': 'htdemucs', '4stems': 'hdemucs_mmi', 'maximum': 'htdemucs_ft'}[self.batch_presets[index]]
-            try:
-                reference = self.probe_audio(source)
-                for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
-                    info = self.probe_audio(directory / f'{source.stem}_({stem})_{model}.wav')
-                    if (info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le')
-                            or info['channels'] != reference['channels']
-                            or abs(info['duration'] - reference['duration']) > 0.25):
-                        raise ValueError('incompatible WAV metadata')
-                state = 'VERIFIED EXISTING'
-            except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError):
-                state = 'PARTIAL / UNKNOWN'
+            state = ('VERIFIED EXISTING' if self.verified_stem_paths(
+                self.batch_paths[index], self.batch_presets[index], self.stem_output_dir(index))
+                else 'PARTIAL / UNKNOWN')
+        elif state == 'PARTIAL / UNKNOWN' and self.expected_stem_paths(
+                self.batch_paths[index], self.batch_presets[index], self.stem_output_dir(index)) is None:
+            state = 'UNVERIFIED'
         if state == 'READY':
             state = 'QUEUED'
         self.set_batch_label(index, state)
@@ -943,57 +1008,16 @@ class Producer(QMainWindow):
         }
 
     def validate_output(self):
-        """Check four-stem runs only; do not imply other presets were validated."""
-        if self.presets.currentData() == 'drum-parts':
-            source = Path(self.input.text().strip()).expanduser()
-            expected = ('kick', 'snare', 'toms', 'hh', 'ride', 'crash')
-            paths = [self.current_output / f'{source.stem}_({stem})_MDX23C-DrumSep-aufr33-jarredou.wav' for stem in expected]
-            try:
-                if not all(p.is_file() and p.stat().st_size > 0 for p in paths):
-                    self.append_log('Drum output check FAILED: missing or empty drum stem.')
-                    return False
-                reference = self.probe_audio(source)
-                for path in paths:
-                    info = self.probe_audio(path)
-                    if info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le'):
-                        raise ValueError(f'{path.name}: unsupported WAV codec {info["codec"]}')
-                    if (info['rate'] != reference['rate'] or info['channels'] != reference['channels']
-                            or abs(info['duration'] - reference['duration']) > 0.25):
-                        raise ValueError(f'{path.name}: sample rate, channels or duration differ from input')
-                self.append_log('Drum output check PASSED: six nonempty WAV stems and metadata verified.')
-                return True
-            except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError) as exc:
-                self.append_log(f'Drum output check FAILED: {exc}')
-                return False
-        if self.presets.currentData() not in FOUR_STEM_PRESETS:
+        """Validate every expected WAV before marking a supported run verified."""
+        preset = self.presets.currentData()
+        if preset not in FOUR_STEM_PRESETS and preset != 'drum-parts':
             self.append_log("Output check: manual inspection required for this preset.")
             return None
         source = Path(self.input.text().strip()).expanduser()
-        output_dir = self.current_output
-        model = {"balanced": "htdemucs", "4stems": "hdemucs_mmi", "maximum": "htdemucs_ft"}[self.presets.currentData()]
-        expected = {}
-        for stem in ("Bass", "Drums", "Other", "Vocals"):
-            matches = [output_dir / f"{source.stem}_({stem})_{model}.wav"]
-            matches = [path for path in matches if path.is_file()]
-            if len(matches) != 1 or matches[0].stat().st_size == 0:
-                self.append_log(f"Output check FAILED: expected one nonempty {stem} WAV; found {len(matches)}.")
-                return False
-            expected[stem] = matches[0]
-        try:
-            source_info = self.probe_audio(source)
-            for stem, path in expected.items():
-                info = self.probe_audio(path)
-                if info["codec"] not in ("pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_f32le"):
-                    raise ValueError(f"{stem}: unsupported WAV codec {info['codec']}")
-                if info["channels"] != source_info["channels"]:
-                    raise ValueError(f"{stem}: channel count differs from input")
-                if abs(info["duration"] - source_info["duration"]) > 0.25:
-                    raise ValueError(f"{stem}: duration differs by more than 0.25 seconds")
-                self.append_log("Verified {}: {} Hz / {} ch / {} / {:.2f}s".format(stem, info["rate"], info["channels"], info["codec"], info["duration"]))
-        except (OSError, subprocess.SubprocessError, KeyError, IndexError, ValueError) as exc:
-            self.append_log(f"Output check FAILED: {exc}")
+        if self.verified_stem_paths(source, preset, self.current_output) is None:
+            self.append_log("Output check FAILED: expected WAV stems or compatible audio metadata missing.")
             return False
-        self.append_log("Output check PASSED: four WAV stems exist, metadata and durations verified.")
+        self.append_log("Output check PASSED: expected WAV stems and audio metadata verified.")
         return True
 
     def finished(self, code, exit_status):
