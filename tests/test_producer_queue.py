@@ -90,6 +90,43 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
         self.assertFalse((directory / 'called').exists())
 
+    def test_multifile_queue_expansion_and_mixed_statuses(self):
+        import wave
+        def wav(path):
+            with wave.open(str(path), 'wb') as out:
+                out.setnchannels(2)
+                out.setsampwidth(2)
+                out.setframerate(44100)
+                out.writeframes(b'\0' * 44100 * 4)
+        ready = self.audio('queued.wav')
+        verified = self.root / 'verified.wav'
+        wav(verified)
+        incomplete = self.audio('partial.wav')
+        target = self.root / 'verified_stemlab' / 'balanced'
+        target.mkdir(parents=True)
+        for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+            wav(target / f'verified_({stem})_htdemucs.wav')
+        partial_dir = self.root / 'partial_stemlab' / 'balanced'
+        partial_dir.mkdir(parents=True)
+        (partial_dir / 'partial_(Bass)_htdemucs.wav').write_bytes(b'fixture')
+        self.w.add_paths([str(ready), str(verified), str(incomplete)])
+        tree = self.w.queue_list
+        self.assertEqual(tree.topLevelItemCount(), 3)
+        self.assertEqual([tree.topLevelItem(i).text(2) for i in range(3)],
+                         ['Queued', 'Verified Existing', 'Partial / Unknown'])
+        parent = tree.topLevelItem(1)
+        parent.setExpanded(True)
+        app.processEvents()
+        self.assertTrue(parent.isExpanded())
+        self.assertEqual(parent.childCount(), 4)
+        self.assertEqual({parent.child(i).text(0) for i in range(4)},
+                         {'Bass', 'Drums', 'Other', 'Vocals'})
+        self.assertTrue(all(Path(parent.child(i).data(0, m.Qt.UserRole)).is_file()
+                            for i in range(4)))
+        self.assertEqual(tree.topLevelItem(0).childCount(), 0)
+        self.assertEqual(tree.topLevelItem(2).childCount(), 1)
+        self.assertEqual(tree.topLevelItem(1).text(2), 'Verified Existing')
+
     def test_source_row_exposes_drag_path(self):
         source = self.audio('source.wav')
         self.w.add_paths([str(source)])

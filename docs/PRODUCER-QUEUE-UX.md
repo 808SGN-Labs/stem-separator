@@ -200,6 +200,12 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Multi-file queue acceptance (pending local regression and desktop review)
+
+- Added a synthetic three-file Queue UI regression: queued, metadata-verified existing WAVs, and partial output in the same tree.
+- Asserts expanded verified row exposes exactly four actual WAV child paths, while partial and queued rows remain correctly identified.
+- No producer processing logic changed. The regression must be executed on Linux Mint and the populated queue visually reviewed before acceptance.
+
 ## Appearance dialog polish v3 (pending local regression)
 
 - Appearance dialog now uses theme-specific background, controls, and borders rather than default gray Qt styling.
