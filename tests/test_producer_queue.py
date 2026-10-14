@@ -640,6 +640,133 @@ for name in ("Bass", "Drums", "Other", "Vocals"):
             self.w.apply_theme(previous if previous in m.THEMES else 'Saigon Mint')
             self.w.settings.setValue('appearance/theme', previous)
 
+    def test_queue_chevrons_are_visible_in_both_states_for_all_themes(self):
+        source = self.wav(self.root / 'chevrons.wav')
+        directory = self.w.default_output_dir(source, 'balanced')
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+            self.wav(directory / f'chevrons_({stem})_htdemucs.wav')
+        self.w.add_paths([str(source), str(self.audio('no-stems.wav'))])
+        self.wait_checks()
+        self.w.show()
+        tree = self.w.queue_list
+        parent = tree.topLevelItem(0)
+        empty = tree.topLevelItem(1)
+        self.assertEqual(tree.indentation(), 22)
+        self.assertEqual(parent.childCount(), 4)
+        self.assertEqual(parent.childIndicatorPolicy(), m.QTreeWidgetItem.DontShowIndicatorWhenChildless)
+        self.assertEqual(empty.childIndicatorPolicy(), m.QTreeWidgetItem.DontShowIndicatorWhenChildless)
+        old_style = app.styleSheet()
+        try:
+            for theme in m.THEMES:
+                with self.subTest(theme=theme):
+                    app.setStyleSheet(m.theme_stylesheet(theme))
+                    masks = []
+                    for expanded in (False, True):
+                        parent.setExpanded(expanded)
+                        app.processEvents()
+                        image = tree.viewport().grab().toImage()
+                        center_y = tree.visualItemRect(parent).center().y()
+                        mask = {(x, y - center_y) for y in range(center_y - 8, center_y + 9)
+                                for x in range(3, tree.indentation())
+                                if max(image.pixelColor(x, y).red(), image.pixelColor(x, y).green(),
+                                       image.pixelColor(x, y).blue()) > 180}
+                        self.assertGreater(len(mask), 8)
+                        masks.append(mask)
+                    self.assertNotEqual(masks[0], masks[1])
+                    self.assertEqual([parent.child(i).text(2) for i in range(4)], ['Ready'] * 4)
+            parent.setExpanded(False)
+            app.processEvents()
+            image = tree.viewport().grab().toImage()
+            center_y = tree.visualItemRect(empty).center().y()
+            bright = sum(max(image.pixelColor(x, y).red(), image.pixelColor(x, y).green(),
+                             image.pixelColor(x, y).blue()) > 180
+                         for y in range(center_y - 8, center_y + 9)
+                         for x in range(3, tree.indentation()))
+            self.assertLess(bright, 5)  # No chevron when there are no stem files.
+            tree.setCurrentItem(parent)
+            parent.setExpanded(False)
+            parent.setExpanded(True)
+            self.assertIs(tree.currentItem(), parent)
+        finally:
+            app.setStyleSheet(old_style)
+
+    def test_source_rows_are_distinct_and_stems_compact_in_all_themes(self):
+        source = self.wav(self.root / 'hierarchy.wav')
+        directory = self.w.default_output_dir(source, 'balanced')
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+            self.wav(directory / f'hierarchy_({stem})_htdemucs.wav')
+        self.w.add_paths([str(source)])
+        self.wait_checks()
+        self.w.show()
+        tree = self.w.queue_list
+        parent = tree.topLevelItem(0)
+        parent.setExpanded(True)
+        old_style, old_theme = app.styleSheet(), self.w.theme_name
+        try:
+            with patch.object(self.w.settings, 'setValue'):
+                for theme in m.THEMES:
+                    with self.subTest(theme=theme):
+                        self.w.apply_theme(theme)
+                        app.processEvents()
+                        child = parent.child(0)
+                        self.assertGreater(parent.font(0).weight(), child.font(0).weight())
+                        self.assertLess(tree.visualItemRect(child).height(),
+                                        tree.visualItemRect(parent).height())
+                        self.assertEqual(parent.childCount(), 4)
+                        image = tree.viewport().grab().toImage()
+                        source_color = image.pixelColor(400, tree.visualItemRect(parent).center().y())
+                        child_color = image.pixelColor(400, tree.visualItemRect(child).center().y())
+                        self.assertNotEqual(source_color.name(), child_color.name())
+                        self.assertEqual(image.pixelColor(0, tree.visualItemRect(parent).center().y()).name(),
+                                         m.THEMES[theme][3])
+                        self.assertEqual(tree.progress_color.name(), m.THEMES[theme][3])
+                        self.w.set_batch_label(0, 'PROCESSING')
+                        app.processEvents()
+                        image = tree.viewport().grab().toImage()
+                        file_rect = tree.visualRect(tree.model().index(0, 0))
+                        self.assertEqual(image.pixelColor(file_rect.left() + 10, file_rect.bottom() - 1).name(),
+                                         m.THEMES[theme][3])
+                        self.w.set_batch_label(0, 'VERIFIED EXISTING')
+                        self.assertFalse(tree.progress_timer.isActive())
+        finally:
+            self.w.theme_name = old_theme
+            app.setStyleSheet(old_style)
+
+    def test_source_progress_is_indeterminate_and_event_loop_stays_responsive(self):
+        self.backend.write_text(self.backend.read_text() +
+                                '\nprint("50%|###| 2/4", flush=True)\nimport time\ntime.sleep(0.45)\n')
+        source = self.audio('progress.wav')
+        self.w.add_paths([str(source)])
+        self.wait_checks()
+        parent = self.w.queue_list.topLevelItem(0)
+        tree = self.w.queue_list
+        self.assertEqual(parent.childCount(), 0)
+        self.assertEqual(parent.childIndicatorPolicy(), m.QTreeWidgetItem.DontShowIndicatorWhenChildless)
+        self.assertFalse(tree.progress_timer.isActive())
+        self.w.start_batch()
+        deadline = time.monotonic() + 2
+        while (self.w.stage_label.text() != 'MODEL STEP 2/4'
+               and time.monotonic() < deadline):
+            app.processEvents(); time.sleep(.005)
+        self.assertEqual(self.w.stage_label.text(), 'MODEL STEP 2/4')
+        self.assertEqual((self.w.progress.value(), self.w.progress.maximum()), (2, 4))
+        self.assertEqual(parent.data(2, m.Qt.UserRole), 'PROCESSING')
+        self.assertTrue(tree.progress_timer.isActive())
+        ticks = []
+        m.QTimer.singleShot(20, lambda: ticks.append(tree._progress_offset))
+        deadline = time.monotonic() + 1
+        while not ticks and time.monotonic() < deadline:
+            app.processEvents(); time.sleep(.005)
+        self.assertTrue(ticks)
+        self.assertGreaterEqual(ticks[0], 80)
+        self.wait_done()
+        self.assertFalse(tree.progress_timer.isActive())
+        self.assertEqual(parent.childCount(), 0)
+
     def test_queue_polish_status_colors_and_controls(self):
         source = self.audio('polish.wav')
         self.w.add_paths([str(source)])
@@ -882,6 +1009,7 @@ for name in ("Bass", "Drums", "Other", "Vocals"):
         self.backend.write_text('#!/usr/bin/env python3\nimport sys,wave\nfrom pathlib import Path\np=Path(sys.argv[3]);p.mkdir(parents=True,exist_ok=True)\nwith wave.open(str(p/(Path(sys.argv[2]).stem+"_(Bass)_htdemucs.wav")),"wb") as out:\n out.setnchannels(2);out.setsampwidth(2);out.setframerate(44100);out.writeframes(b"\\0"*44100*4)\nsys.exit(7)\n')
         self.w.add_paths([str(self.audio('a.wav')),str(self.audio('b.wav'))])
         self.w.start_batch();self.wait_done()
+        self.assertFalse(self.w.queue_list.progress_timer.isActive())
         self.assertEqual([self.w.queue_list.topLevelItem(i).text(2) for i in range(2)],['Failed','Failed'])
         for i in range(2):
             parent = self.w.queue_list.topLevelItem(i)
@@ -915,7 +1043,9 @@ for name in ("Bass", "Drums", "Other", "Vocals"):
         while 'ready' not in self.w.log.toPlainText() and time.monotonic()<end:
             app.processEvents();time.sleep(.005)
         self.assertIn('ready',self.w.log.toPlainText())
+        self.assertTrue(self.w.queue_list.progress_timer.isActive())
         self.w.cancel();self.wait_done()
+        self.assertFalse(self.w.queue_list.progress_timer.isActive())
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Cancelled')
         self.assertEqual(self.w.queue_list.topLevelItem(0).childCount(), 1)
         self.assertEqual(self.w.queue_list.topLevelItem(0).child(0).text(2), 'Unverified')

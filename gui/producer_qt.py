@@ -11,8 +11,8 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QProcess, QRunnable, QThreadPool, Qt, QUrl, Signal, QTimer, QMimeData, QSettings
-from PySide6.QtGui import QBrush, QColor, QDesktopServices, QDrag
+from PySide6.QtCore import QEvent, QObject, QPointF, QProcess, QRunnable, QRect, QSize, QThreadPool, Qt, QUrl, Signal, QTimer, QMimeData, QSettings
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QDrag, QFont, QPainter, QPen
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
@@ -115,7 +115,7 @@ QProgressBar { background: #0c1218; border: 1px solid #374753; border-radius: 5p
                text-align: center; height: 9px; }
 QProgressBar::chunk { background: #73d6c6; border-radius: 4px; }
 QTreeWidget { background: #10171d; border: 1px solid #33424d; border-radius: 8px; alternate-background-color: #172129; outline: 0; }
-QTreeWidget::item { min-height: 36px; padding: 4px 8px; border-bottom: 1px solid #24303a; }
+QTreeWidget::item { padding: 4px 8px; border-bottom: 1px solid #24303a; }
 QTreeWidget::item:hover { background: #21323c; }
 QTreeWidget::item:selected { background: #29464a; }
 QTreeWidget::branch { background: transparent; }
@@ -190,6 +190,74 @@ class DropEdit(QLineEdit):
 class QueueList(QTreeWidget):
     pathsDropped = Signal(list)
 
+    def drawRow(self, painter, option, index):
+        super().drawRow(painter, option, index)
+        if index.parent().isValid():
+            return
+        item = self.topLevelItem(index.row())
+        if not item.isSelected():
+            tint = QColor(self.source_color)
+            tint.setAlpha(75)
+            painter.fillRect(option.rect, tint)
+        painter.fillRect(QRect(option.rect.left(), option.rect.top() + 3,
+                               2, max(0, option.rect.height() - 6)), self.progress_color)
+        if item.data(2, Qt.UserRole) != 'PROCESSING':
+            return
+        rect = option.rect
+        if rect.isEmpty():
+            return
+        segment = max(28, min(80, rect.width() // 6))
+        offset = self._progress_offset % (rect.width() + segment)
+        track = QRect(rect.left(), rect.bottom() - 2, rect.width(), 3)
+        color = QColor(self.progress_color)
+        faint = QColor(color)
+        faint.setAlpha(60)
+        painter.save()
+        painter.setClipRect(track)
+        painter.fillRect(track, faint)
+        painter.fillRect(QRect(rect.left() + offset - segment, track.top(), segment, 3), color)
+        painter.restore()
+
+    def sync_progress_animation(self):
+        active = any(self.topLevelItem(i).data(2, Qt.UserRole) == 'PROCESSING'
+                     for i in range(self.topLevelItemCount()))
+        if active and not self.progress_timer.isActive():
+            self._progress_offset = 80
+            self.progress_timer.start()
+        elif not active:
+            self.progress_timer.stop()
+        self.viewport().update()
+
+    def advance_progress(self):
+        self._progress_offset += 9
+        self.viewport().update()
+
+    def drawBranches(self, painter, rect, index):
+        super().drawBranches(painter, rect, index)
+        if index.parent().isValid() or index.column() != 0:
+            return
+        item = self.topLevelItem(index.row())
+        if item is None or item.childIndicatorPolicy() == QTreeWidgetItem.DontShowIndicator:
+            return
+        if not item.childCount() and item.childIndicatorPolicy() != QTreeWidgetItem.ShowIndicator:
+            return
+        center = rect.center()
+        x, y = center.x(), center.y()
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        pen = QPen(QColor('#e6ecf0'))
+        pen.setWidthF(2.5)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        if item.isExpanded():
+            points = (QPointF(x - 5, y - 2), QPointF(x, y + 3), QPointF(x + 5, y - 2))
+        else:
+            points = (QPointF(x - 2, y - 5), QPointF(x + 3, y), QPointF(x - 2, y + 5))
+        painter.drawLine(points[0], points[1])
+        painter.drawLine(points[1], points[2])
+        painter.restore()
+
     def mousePressEvent(self, event):
         self._drag_origin = event.position().toPoint() if event.button() == Qt.LeftButton else None
         super().mousePressEvent(event)
@@ -232,6 +300,12 @@ class QueueList(QTreeWidget):
 
     def __init__(self):
         super().__init__()
+        self.source_color = QColor(THEMES['Saigon Mint'][1])
+        self.progress_color = QColor(THEMES['Saigon Mint'][3])
+        self._progress_offset = 0
+        self.progress_timer = QTimer(self)
+        self.progress_timer.setInterval(80)
+        self.progress_timer.timeout.connect(self.advance_progress)
         self.can_export_item = None
         self.setAcceptDrops(True)
         self.setDragDropMode(QTreeWidget.DragDrop)
@@ -239,7 +313,7 @@ class QueueList(QTreeWidget):
         self.setDefaultDropAction(Qt.CopyAction)
         self.setColumnCount(3)
         self.setHeaderLabels(["FILE", "MODE", "STATUS"])
-        self.setAlternatingRowColors(True)
+        self.setAlternatingRowColors(False)
         self.setRootIsDecorated(True)
         self.setIndentation(22)
         self.header().setStretchLastSection(False)
@@ -461,6 +535,9 @@ class Producer(QMainWindow):
             return
         self.theme_name = name
         QApplication.instance().setStyleSheet(theme_stylesheet(name))
+        self.queue_list.source_color = QColor(THEMES[name][1])
+        self.queue_list.progress_color = QColor(THEMES[name][3])
+        self.queue_list.viewport().update()
         self.settings.setValue('appearance/theme', name)
         # Queue item status brushes are not stylesheet-managed.
         for index in range(self.queue_list.topLevelItemCount()):
@@ -625,7 +702,10 @@ class Producer(QMainWindow):
         item = QTreeWidgetItem([source.name, "", "Queued"])
         item.setToolTip(0, str(source) + "\nDrag filename to export original audio")
         item.setData(0, Qt.UserRole, str(source))
-        item.setChildIndicatorPolicy(QTreeWidgetItem.ShowIndicator)
+        font = item.font(0)
+        font.setWeight(QFont.DemiBold)
+        item.setFont(0, font)
+        item.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless)
         item.setExpanded(False)
         self.queue_list.addTopLevelItem(item)
         mode = QComboBox()
@@ -636,7 +716,7 @@ class Producer(QMainWindow):
         mode.setCurrentIndex(mode.findData(self.batch_presets[index]))
         mode.currentIndexChanged.connect(lambda _, row=index, combo=mode: self.set_job_preset(row, combo.currentData()))
         self.queue_list.setItemWidget(item, 1, mode)
-        item.setSizeHint(0, mode.sizeHint())
+        item.setSizeHint(0, QSize(mode.sizeHint().width(), 38))
         self.refresh_existing_status(index)
 
     def on_queue_expanded(self, item):
@@ -797,8 +877,7 @@ class Producer(QMainWindow):
             child.setToolTip(0, str(path))
             child.setData(0, Qt.UserRole, str(path))
             parent.addChild(child)
-        parent.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless if stems
-                                      else QTreeWidgetItem.ShowIndicator)
+        parent.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless)
         if parent.isExpanded() != expanded:
             parent.setExpanded(expanded)
 
@@ -820,6 +899,7 @@ class Producer(QMainWindow):
         self.batch_presets.clear()
         self.batch_custom_output = None
         self.queue_list.clear()
+        self.queue_list.sync_progress_animation()
 
     def set_batch_label(self, index, state):
         item = self.queue_list.topLevelItem(index)
@@ -844,6 +924,7 @@ class Producer(QMainWindow):
         elif key == 'PROCESSING':
             color = QColor(THEMES[self.theme_name][3]).darker(120).name()
         item.setForeground(2, QBrush(QColor(color)))
+        self.queue_list.sync_progress_animation()
         self.refresh_stem_children(index)
 
     def start_batch(self):
@@ -1275,6 +1356,7 @@ class Producer(QMainWindow):
             cancelled.set()
             check.signals.done.disconnect(self._check_finished)
         self._checks.clear()
+        self.queue_list.progress_timer.stop()
         if self.process is not None and self.process.state() != QProcess.NotRunning:
             self.batch_active = False  # Never launch the next job while closing.
             process = self.process
