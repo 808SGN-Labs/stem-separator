@@ -3,11 +3,13 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 import wave
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from shiboken6 import isValid
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 spec = importlib.util.spec_from_file_location('producer', Path(__file__).resolve().parents[1] / 'gui/producer_qt.py')
 m = importlib.util.module_from_spec(spec)
@@ -53,6 +55,262 @@ class QueueTests(unittest.TestCase):
         while self.w.batch_active and time.monotonic()<deadline:
             app.processEvents(); time.sleep(.005)
         self.assertFalse(self.w.batch_active)
+    def wait_checks(self, timeout=6):
+        deadline = time.monotonic() + timeout
+        while self.w._checks and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(.005)
+        app.processEvents()
+        self.assertFalse(self.w._checks)
+    def check_state(self, index):
+        self.assertEqual(self.w.refresh_existing_status(index), 'CHECKING')
+        self.wait_checks()
+        return self.w.queue_list.topLevelItem(index).data(2, m.Qt.UserRole)
+    def validate_output(self):
+        return self.w.verified_stem_paths(Path(self.w.input.text().strip()),
+                                          self.w.presets.currentData(), self.w.current_output) is not None
+    def test_slow_ffprobe_does_not_block_qt_events(self):
+        source = self.wav(self.root / 'slow.wav')
+        directory = self.root / 'slow_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+            self.wav(directory / f'slow_({stem})_htdemucs.wav')
+        probe = self.root / 'ffprobe'
+        probe.write_text('#!/usr/bin/env python3\nimport time\nfrom pathlib import Path\n'
+                         'with Path(__file__).with_name("probe_calls").open("a") as log: log.write("called\\n")\n'
+                         'time.sleep(0.15)\n'
+                         'print(\'{"streams":[{"codec_name":"pcm_s16le","sample_rate":"44100","channels":2}],"format":{"duration":"1.0"}}\')\n')
+        probe.chmod(0o755)
+        ticks = []
+        widget_threads = []
+        set_label = self.w.set_batch_label
+        def checked_label(*args):
+            widget_threads.append(threading.get_ident())
+            return set_label(*args)
+        with patch.object(self.w, 'set_batch_label', side_effect=checked_label), \
+                patch.dict(os.environ, {'PATH': str(self.root) + os.pathsep + os.environ['PATH']}):
+            m.QTimer.singleShot(20, lambda: ticks.append(time.monotonic()))
+            started = time.monotonic()
+            self.w.add_paths([str(source)])
+            self.assertLess(time.monotonic() - started, 0.2)
+            deadline = time.monotonic() + 2
+            while not ticks and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(.005)
+            self.assertTrue(ticks)
+            self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Checking')
+            self.wait_checks()
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Verified Existing')
+        self.assertEqual((self.root / 'probe_calls').read_text().count('called'), 5)
+        self.assertEqual(set(widget_threads), {threading.main_thread().ident})
+
+    def test_stale_check_cannot_verify_changed_preset_or_reimport(self):
+        source = self.wav(self.root / 'stale.wav')
+        directory = self.root / 'stale_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+            self.wav(directory / f'stale_({stem})_htdemucs.wav')
+        entered, release = threading.Event(), threading.Event()
+        original = self.w.probe_audio
+        def delayed(path, **kwargs):
+            entered.set()
+            release.wait(4)
+            return original(path, **kwargs)
+        with patch.object(self.w, 'probe_audio', side_effect=delayed):
+            self.w.add_paths([str(source)])
+            deadline = time.monotonic() + 2
+            while not entered.is_set() and time.monotonic() < deadline:
+                app.processEvents(); time.sleep(.005)
+            self.assertTrue(entered.is_set())
+            combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1)
+            combo.setCurrentIndex(combo.findData('vocals'))
+            self.wait_checks()
+            self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Queued')
+            self.assertFalse(self.w._verified)
+            self.w.clear_batch()
+            self.w.add_paths([str(source)])
+            combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1)
+            combo.setCurrentIndex(combo.findData('vocals'))
+            release.set()
+            self.wait_checks()
+        self.assertNotEqual(self.w.queue_list.topLevelItem(0).text(2), 'Verified Existing')
+        self.assertFalse(self.w._verified)
+
+    def test_missing_verified_stem_schedules_recheck_without_probe_on_drag(self):
+        source = self.wav(self.root / 'removed.wav')
+        directory = self.root / 'removed_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        stems = [self.wav(directory / f'removed_({stem})_htdemucs.wav')
+                 for stem in ('Bass', 'Drums', 'Other', 'Vocals')]
+        self.w.add_paths([str(source)])
+        self.wait_checks()
+        child = self.w.queue_list.topLevelItem(0).child(0)
+        stems[0].unlink()
+        with patch.object(self.w, 'probe_audio', side_effect=AssertionError('GUI reprobed')), \
+                patch.object(m, 'QDrag') as drag:
+            self.w.queue_list.drag_stem(child)
+            drag.assert_not_called()
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Checking')
+        self.wait_checks()
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
+
+    def test_multiple_checks_are_bounded_and_cancelled_on_clear(self):
+        sources = [self.wav(self.root / f'many{i}.wav') for i in range(4)]
+        for source in sources:
+            directory = self.w.default_output_dir(source, 'balanced')
+            directory.mkdir(parents=True)
+            self.mark_owned(directory, source)
+            for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+                self.wav(directory / f'{source.stem}_({stem})_htdemucs.wav')
+        entered = threading.Event()
+        release = threading.Event()
+        def delayed(path, **kwargs):
+            entered.set()
+            release.wait(2)
+            return m.Producer.probe_audio(path, **kwargs)
+        with patch.object(self.w, 'probe_audio', side_effect=delayed):
+            self.w.add_paths([str(source) for source in sources])
+            self.assertEqual(self.w._check_pool.maxThreadCount(), 2)
+            self.assertEqual(self.w.queue_list.topLevelItemCount(), 4)
+            self.assertTrue(entered.wait(2))
+            self.w.clear_batch()
+            release.set()
+            deadline = time.monotonic() + 3
+            while self.w._check_pool.activeThreadCount() and time.monotonic() < deadline:
+                app.processEvents(); time.sleep(.005)
+            app.processEvents()
+        self.assertEqual(self.w.queue_list.topLevelItemCount(), 0)
+        self.assertFalse(self.w._verified)
+
+    def test_ffprobe_timeout_and_cancellation_stop_subprocess(self):
+        probe = self.root / 'ffprobe'
+        probe.write_text('#!/usr/bin/env python3\nimport time\ntime.sleep(5)\n')
+        probe.chmod(0o755)
+        source = self.audio('probe.wav')
+        with patch.dict(os.environ, {'PATH': str(self.root) + os.pathsep + os.environ['PATH']}):
+            started = time.monotonic()
+            with self.assertRaises(subprocess.TimeoutExpired):
+                self.w.probe_audio(source, timeout=.15)
+            self.assertLess(time.monotonic() - started, 1)
+            cancelled = threading.Event()
+            failures = []
+            def run():
+                try:
+                    self.w.probe_audio(source, cancelled=cancelled)
+                except subprocess.TimeoutExpired as error:
+                    failures.append(error)
+            worker = threading.Thread(target=run)
+            worker.start()
+            time.sleep(.1)
+            cancelled.set()
+            worker.join(1)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(len(failures), 1)
+
+    def test_close_during_validation_disconnects_result_before_widget_destruction(self):
+        source = self.wav(self.root / 'closing.wav')
+        directory = self.root / 'closing_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
+            self.wav(directory / f'closing_({stem})_htdemucs.wav')
+        callbacks = []
+        class ClosingProducer(m.Producer):
+            def _check_finished(self, *args):
+                callbacks.append('result')
+                super()._check_finished(*args)
+        other = ClosingProducer()
+        entered, release = threading.Event(), threading.Event()
+        original = other.probe_audio
+        def delayed(path, **kwargs):
+            entered.set()
+            release.wait(3)
+            return original(path, **kwargs)
+        try:
+            with patch.object(other, 'probe_audio', side_effect=delayed):
+                other.add_paths([str(source)])
+                deadline = time.monotonic() + 2
+                while not entered.is_set() and time.monotonic() < deadline:
+                    app.processEvents(); time.sleep(.005)
+                self.assertTrue(entered.is_set())
+                self.assertEqual(other.queue_list.topLevelItem(0).text(2), 'Checking')
+                other.close()
+                self.assertTrue(other._closing)
+                self.assertFalse(other._checks)
+                other.deleteLater()
+                release.set()
+                app.sendPostedEvents(None, m.QEvent.DeferredDelete)
+                app.processEvents()
+                self.assertFalse(isValid(other))
+                self.assertEqual(callbacks, [])
+        finally:
+            release.set()
+            if isValid(other):
+                other.close()
+                other.deleteLater()
+                app.sendPostedEvents(None, m.QEvent.DeferredDelete)
+
+    def test_close_discards_already_queued_worker_result(self):
+        source = self.audio('queued-close.wav')
+        callbacks = []
+        class ClosingProducer(m.Producer):
+            def _check_finished(self, *args):
+                callbacks.append('result')
+                super()._check_finished(*args)
+        other = ClosingProducer()
+        entered = threading.Event()
+        def inspect(*args):
+            entered.set()
+            return 'READY'
+        try:
+            with patch.object(other, 'inspect_output', side_effect=inspect):
+                other.add_paths([str(source)])
+                self.assertTrue(entered.wait(2))
+                deadline = time.monotonic() + 2
+                while other._check_pool.activeThreadCount() and time.monotonic() < deadline:
+                    time.sleep(.005)
+                self.assertEqual(other._check_pool.activeThreadCount(), 0)
+                self.assertEqual(other.queue_list.topLevelItem(0).text(2), 'Checking')
+                other.close()
+                other.deleteLater()
+                app.sendPostedEvents(None, m.QEvent.DeferredDelete)
+                app.processEvents()
+                self.assertFalse(isValid(other))
+                self.assertEqual(callbacks, [])
+        finally:
+            if isValid(other):
+                other.close()
+                other.deleteLater()
+                app.sendPostedEvents(None, m.QEvent.DeferredDelete)
+
+    def test_successful_job_verifies_then_drags_generated_stem(self):
+        source = self.wav(self.root / 'generated.wav')
+        self.backend.write_text('''#!/usr/bin/env python3
+import sys, wave
+from pathlib import Path
+source, directory = Path(sys.argv[2]), Path(sys.argv[3])
+with Path(__file__).with_name("backend_calls").open("a") as log:
+    log.write("\\t".join(sys.argv[1:4]) + "\\n")
+for name in ("Bass", "Drums", "Other", "Vocals"):
+    with wave.open(str(directory / f"{source.stem}_({name})_htdemucs.wav"), "wb") as out:
+        out.setnchannels(2); out.setsampwidth(2); out.setframerate(44100)
+        out.writeframes(b"\\0" * 44100 * 4)
+''')
+        self.w.add_paths([str(source)])
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(len(self.backend_calls()), 1)
+        parent = self.w.queue_list.topLevelItem(0)
+        self.assertEqual(parent.text(2), 'Verified')
+        self.assertEqual([parent.child(i).text(2) for i in range(4)], ['Ready'] * 4)
+        with patch.object(m, 'QDrag') as drag:
+            self.w.queue_list.drag_stem(parent.child(0))
+        drag.assert_called_once()
+        self.assertEqual(Path(drag.return_value.setMimeData.call_args.args[0].urls()[0].toLocalFile()).name,
+                         'generated_(Bass)_htdemucs.wav')
     def test_unrelated_wavs_are_not_listed_as_supported_stems(self):
         source = self.wav(self.root / 'song.wav')
         self.w.add_paths([str(source)])
@@ -76,6 +334,7 @@ class QueueTests(unittest.TestCase):
         (target / 'unsafe_(Bass)_htdemucs.wav').write_bytes(b'malformed WAV')
         (target / 'unsafe_(Drums)_htdemucs.wav').touch()
         self.w.refresh_existing_status(0)
+        self.wait_checks()
         parent = self.w.queue_list.topLevelItem(0)
         self.assertEqual(parent.text(2), 'Partial / Unknown')
         self.assertEqual({parent.child(i).text(0) for i in range(parent.childCount())},
@@ -114,7 +373,7 @@ class QueueTests(unittest.TestCase):
         self.w.start_batch()
         self.wait_done()
         self.assertEqual(paths[0].read_bytes(), b'preserve')
-        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Existing Stems')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
         self.assertFalse((target / 'called').exists())
 
     def test_reimport_verifies_existing_wavs_without_processing(self):
@@ -131,6 +390,7 @@ class QueueTests(unittest.TestCase):
         stems = [directory / f'existing_({name})_htdemucs.wav' for name in ('Bass','Drums','Other','Vocals')]
         for path in stems: wav(path)
         self.w.add_paths([str(source)])
+        self.wait_checks()
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Verified Existing')
         parent = self.w.queue_list.topLevelItem(0)
         self.assertEqual([parent.child(i).text(2) for i in range(parent.childCount())], ['Ready'] * 4)
@@ -149,7 +409,7 @@ class QueueTests(unittest.TestCase):
                          str(stems[0]))
         self.assertFalse((directory / 'called').exists())
         wav(stems[0], frames=100)
-        self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
+        self.assertEqual(self.check_state(0), 'PARTIAL / UNKNOWN')
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
         self.assertTrue(all(parent.child(i).text(2) == 'Unverified' for i in range(parent.childCount())))
         self.assertFalse((directory / 'called').exists())
@@ -162,6 +422,7 @@ class QueueTests(unittest.TestCase):
         stems = [self.wav(directory / f'changed_({name})_htdemucs.wav')
                  for name in ('Bass', 'Drums', 'Other', 'Vocals')]
         self.w.add_paths([str(source)])
+        self.wait_checks()
         parent = self.w.queue_list.topLevelItem(0)
         self.assertEqual(parent.text(2), 'Verified Existing')
         for payload in (b'not a WAV', b'RIFF\0\0\0\0WAVE', b''):
@@ -193,7 +454,7 @@ class QueueTests(unittest.TestCase):
         parent = self.w.queue_list.topLevelItem(0)
         self.assertEqual(parent.childCount(), 1)
         self.assertEqual(parent.child(0).text(2), 'Unverified')
-        self.assertEqual(self.w.refresh_existing_status(0), 'UNVERIFIED')
+        self.assertEqual(self.check_state(0), 'UNVERIFIED')
         self.assertEqual(parent.text(2), 'Unverified')
         with patch.object(m, 'QDrag') as drag:
             self.w.queue_list.setCurrentItem(parent.child(0))
@@ -230,6 +491,7 @@ class QueueTests(unittest.TestCase):
         self.mark_owned(partial_dir, incomplete)
         (partial_dir / 'partial_(Bass)_htdemucs.wav').write_bytes(b'fixture')
         self.w.add_paths([str(ready), str(verified), str(incomplete)])
+        self.wait_checks()
         tree = self.w.queue_list
         self.assertEqual(tree.topLevelItemCount(), 3)
         self.assertEqual([tree.topLevelItem(i).text(2) for i in range(3)],
@@ -270,11 +532,11 @@ class QueueTests(unittest.TestCase):
         self.mark_owned(target, source, 'drum-parts')
         paths = [self.wav(target / f'drums_({name})_MDX23C-DrumSep-aufr33-jarredou.wav')
                  for name in ('kick', 'snare', 'toms', 'hh', 'ride', 'crash')]
-        self.assertEqual(self.w.refresh_existing_status(0), 'VERIFIED EXISTING')
+        self.assertEqual(self.check_state(0), 'VERIFIED EXISTING')
         parent = self.w.queue_list.topLevelItem(0)
         self.assertEqual([parent.child(i).text(2) for i in range(6)], ['Ready'] * 6)
         paths[0].write_bytes(b'broken')
-        self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
+        self.assertEqual(self.check_state(0), 'PARTIAL / UNKNOWN')
         self.assertTrue(all(parent.child(i).text(2) == 'Unverified' for i in range(6)))
 
     def test_four_stem_rate_matches_backend_output_not_source(self):
@@ -291,12 +553,12 @@ class QueueTests(unittest.TestCase):
                 self.mark_owned(target, source, preset)
                 paths = [self.wav(target / f'rate_({name})_{model}.wav')
                          for name in ('Bass', 'Drums', 'Other', 'Vocals')]
-                self.assertEqual(self.w.refresh_existing_status(0), 'VERIFIED EXISTING')
+                self.assertEqual(self.check_state(0), 'VERIFIED EXISTING')
                 self.w.current_output = target
-                self.assertTrue(self.w.validate_output())
+                self.assertTrue(self.validate_output())
                 self.wav(paths[0], frames=48000, rate=48000)
-                self.assertEqual(self.w.refresh_existing_status(0), 'PARTIAL / UNKNOWN')
-                self.assertFalse(self.w.validate_output())
+                self.assertEqual(self.check_state(0), 'PARTIAL / UNKNOWN')
+                self.assertFalse(self.validate_output())
                 self.assertTrue(all(self.w.queue_list.topLevelItem(0).child(i).text(2) == 'Unverified'
                                     for i in range(4)))
 
@@ -319,10 +581,10 @@ class QueueTests(unittest.TestCase):
         self.w.set_input(str(source))
         self.w.presets.setCurrentIndex(self.w.presets.findData('drum-parts'))
         self.w.current_output = target
-        self.assertTrue(self.w.validate_output())
+        self.assertTrue(self.validate_output())
         kick = target / 'drums_(kick)_MDX23C-DrumSep-aufr33-jarredou.wav'
         kick.unlink()
-        self.assertFalse(self.w.validate_output())
+        self.assertFalse(self.validate_output())
         wav(kick)
         original = self.w.probe_audio
         with patch.object(self.w, 'probe_audio') as probe:
@@ -332,7 +594,7 @@ class QueueTests(unittest.TestCase):
                     info['rate'] = 48000
                 return info
             probe.side_effect = wrong_rate
-            self.assertFalse(self.w.validate_output())
+            self.assertFalse(self.validate_output())
         with patch.object(self.w, 'probe_audio') as probe:
             def wrong_codec(path):
                 info = original(path)
@@ -340,7 +602,7 @@ class QueueTests(unittest.TestCase):
                     info['codec'] = 'mp3'
                 return info
             probe.side_effect = wrong_codec
-            self.assertFalse(self.w.validate_output())
+            self.assertFalse(self.validate_output())
 
     def test_copy_button_follows_details_visibility(self):
         self.assertFalse(self.w.copy_log_button.isVisible())
@@ -418,15 +680,14 @@ class QueueTests(unittest.TestCase):
         self.w.add_paths([str(a),str(b)])
         combo=self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(1),1)
         combo.setCurrentIndex(combo.findData('vocals'))
-        with patch.object(self.w,'validate_output',side_effect=[True,None]):
-            self.w.start_batch()
-            self.assertFalse(self.w.input_browse.isEnabled())
-            self.assertFalse(self.w.output_browse.isEnabled())
-            self.w.set_input(str(b))
-            self.wait_done()
+        self.w.start_batch()
+        self.assertFalse(self.w.input_browse.isEnabled())
+        self.assertFalse(self.w.output_browse.isEnabled())
+        self.w.set_input(str(b))
+        self.wait_done()
         self.assertEqual((self.root/'a_stemlab/balanced/called').read_text(),'balanced')
         self.assertEqual((self.root/'b_stemlab/vocals/called').read_text(),'vocals')
-        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Verified')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Check Output')
         self.assertEqual(self.w.queue_list.topLevelItem(1).text(2),'Unverified')
         self.assertIn('a.wav',self.w.log.toPlainText())
         self.assertIn('b.wav',self.w.log.toPlainText())
@@ -510,6 +771,7 @@ class QueueTests(unittest.TestCase):
         for stem in stems:
             stem.write_bytes(b'old mp3 result')
         self.w.add_paths([str(source), str(old_source)])
+        self.wait_checks()
         self.assertEqual(self.w.inspect_existing_output(0), 'SOURCE CONFLICT')
         self.assertEqual(self.w.queue_list.topLevelItem(0).childCount(), 0)
         self.assertEqual(self.w.inspect_existing_output(1), 'READY')
@@ -665,7 +927,7 @@ class QueueTests(unittest.TestCase):
     def test_validation_rejects_missing_output(self):
         self.w.set_input(str(self.audio('a.wav')))
         self.w.current_output=self.root
-        self.assertFalse(self.w.validate_output())
+        self.assertFalse(self.validate_output())
     def test_real_wav_validation(self):
         import wave
         def wav(path, frames=44100):
@@ -676,9 +938,9 @@ class QueueTests(unittest.TestCase):
         self.w.set_input(str(source)); self.w.current_output=self.root
         for stem in ('Bass','Drums','Other','Vocals'):
             wav(self.root/f'valid_({stem})_htdemucs.wav')
-        self.assertTrue(self.w.validate_output())
+        self.assertTrue(self.validate_output())
         wav(self.root/'valid_(Bass)_htdemucs.wav', frames=100)
-        self.assertFalse(self.w.validate_output())
+        self.assertFalse(self.validate_output())
 
     def test_close_running(self):
         self.backend.write_text('#!/bin/sh\nexec sleep 30\n')

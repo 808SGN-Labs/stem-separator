@@ -7,9 +7,11 @@ import os
 import re
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QProcess, Qt, QUrl, Signal, QTimer, QMimeData, QSettings
+from PySide6.QtCore import QEvent, QObject, QProcess, QRunnable, QThreadPool, Qt, QUrl, Signal, QTimer, QMimeData, QSettings
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QDrag
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
@@ -28,6 +30,54 @@ FOUR_STEM_MODELS = {"balanced": "htdemucs", "4stems": "hdemucs_mmi", "maximum": 
 FOUR_STEM_OUTPUT_RATE = 44100
 AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg", ".aiff", ".aif"}
 OWNER_FILE = ".stemlab-source.json"
+CHECK_TIMEOUT = 20
+
+
+class CheckSignals(QObject):
+    done = Signal(int, int, object)
+
+
+class OutputCheck(QRunnable):
+    def __init__(self, row_id, generation, cancelled, inspect, verify, source, preset, directory):
+        super().__init__()
+        self.row_id, self.generation, self.cancelled = row_id, generation, cancelled
+        self.inspect, self.verify = inspect, verify
+        self.source, self.preset, self.directory = source, preset, directory
+        self.signals = CheckSignals()
+
+    def run(self):
+        state, paths, snapshot = 'BLOCKED', None, None
+        try:
+            if not self.cancelled.is_set():
+                state = self.inspect(self.source, self.preset, self.directory)
+                if state == 'EXISTING STEMS' and not self.cancelled.is_set():
+                    before = file_snapshot(self.source, self.directory)
+                    paths = self.verify(self.source, self.preset, self.directory,
+                                        self.cancelled, time.monotonic() + CHECK_TIMEOUT)
+                    snapshot = file_snapshot(self.source, self.directory)
+                    state = 'VERIFIED EXISTING' if paths and before == snapshot else 'PARTIAL / UNKNOWN'
+                elif state == 'PARTIAL / UNKNOWN' and self.preset not in FOUR_STEM_PRESETS | {'drum-parts'}:
+                    state = 'UNVERIFIED'
+                elif state == 'READY':
+                    state = 'QUEUED'
+        except (OSError, ValueError, RuntimeError):
+            state, paths, snapshot = 'BLOCKED', None, None
+        self.signals.done.emit(self.row_id, self.generation, (state, paths, snapshot))
+
+
+def file_snapshot(source, directory):
+    """Cheap identity check; never parse audio on the GUI thread."""
+    def stat(path):
+        try:
+            info = path.lstat()
+            return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        except OSError:
+            return None
+    try:
+        entries = tuple(sorted((entry.name, stat(entry)) for entry in directory.iterdir()))
+    except OSError:
+        entries = None
+    return stat(source), stat(directory), entries
 
 PRESETS = [
     ("Balanced · Recommended", "balanced", "4 stems · Best practical CPU starting point"),
@@ -152,7 +202,7 @@ class QueueList(QTreeWidget):
             self._drag_origin = None
             item = self.itemAt(origin)
             path = item.data(0, Qt.UserRole) if item else None
-            if path and Path(path).is_file():
+            if path:
                 self.drag_stem(item)
                 return
         super().mouseMoveEvent(event)
@@ -163,9 +213,11 @@ class QueueList(QTreeWidget):
 
     def drag_stem(self, item):
         path = item.data(0, Qt.UserRole) if item else None
-        if not path or not Path(path).is_file():
+        if not path:
             return
         if not self.can_export_item or not self.can_export_item(item):
+            return
+        if not Path(path).is_file():
             return
         mime = QMimeData()
         mime.setUrls([QUrl.fromLocalFile(str(path))])
@@ -235,6 +287,14 @@ class Producer(QMainWindow):
         self.batch_active = False
         self.batch_preset = None
         self.batch_custom_output = None
+        self._check_pool = QThreadPool(self)
+        self._check_pool.setMaxThreadCount(2)
+        self._next_row_id = 0
+        self._row_ids = []
+        self._generations = {}
+        self._checks = {}
+        self._verified = {}
+        self._closing = False
         self.settings = QSettings('808SGN', 'StemLab')
         saved_theme = self.settings.value('appearance/theme', 'Saigon Mint')
         self.theme_name = saved_theme if saved_theme in THEMES else 'Saigon Mint'
@@ -558,6 +618,10 @@ class Producer(QMainWindow):
             self.status.setText("NO NEW AUDIO FILES")
 
     def add_queue_row(self, source):
+        self._next_row_id += 1
+        row_id = self._next_row_id
+        self._row_ids.append(row_id)
+        self._generations[row_id] = 0
         item = QTreeWidgetItem([source.name, "", "Queued"])
         item.setToolTip(0, str(source) + "\nDrag filename to export original audio")
         item.setData(0, Qt.UserRole, str(source))
@@ -573,7 +637,6 @@ class Producer(QMainWindow):
         mode.currentIndexChanged.connect(lambda _, row=index, combo=mode: self.set_job_preset(row, combo.currentData()))
         self.queue_list.setItemWidget(item, 1, mode)
         item.setSizeHint(0, mode.sizeHint())
-        self.refresh_stem_children(index)
         self.refresh_existing_status(index)
 
     def on_queue_expanded(self, item):
@@ -653,7 +716,7 @@ class Producer(QMainWindow):
             return None
         return {name: directory / f'{source.stem}_({name})_{model}.wav' for name in names}
 
-    def verified_stem_paths(self, source, preset, directory):
+    def verified_stem_paths(self, source, preset, directory, cancelled=None, deadline=None):
         paths = self.expected_stem_paths(source, preset, directory)
         if paths is None:
             return None
@@ -661,12 +724,18 @@ class Producer(QMainWindow):
             if not all(path.is_file() and not path.is_symlink() and path.stat().st_size > 0
                        for path in paths.values()):
                 return None
-            reference = self.probe_audio(source)
+            if cancelled is not None and cancelled.is_set():
+                return None
+            reference = (self.probe_audio(source, timeout=min(12, max(.01, deadline - time.monotonic())), cancelled=cancelled)
+                         if deadline else self.probe_audio(source))
             if (reference['channels'] < 1 or reference['rate'] < 1
                     or not math.isfinite(reference['duration']) or reference['duration'] <= 0):
                 return None
             for path in paths.values():
-                info = self.probe_audio(path)
+                if (cancelled is not None and cancelled.is_set()) or (deadline and time.monotonic() >= deadline):
+                    return None
+                info = (self.probe_audio(path, timeout=min(12, max(.01, deadline - time.monotonic())), cancelled=cancelled)
+                        if deadline else self.probe_audio(path))
                 if (info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le')
                         or info['channels'] != reference['channels']
                         or not math.isfinite(info['duration']) or info['duration'] <= 0
@@ -680,23 +749,23 @@ class Producer(QMainWindow):
 
     def stem_export_allowed(self, item):
         path = item.data(0, Qt.UserRole) if item else None
-        if not path or not Path(path).is_file():
+        if not path:
             return False
         parent = item.parent()
         if parent is None:
             index = self.queue_list.indexOfTopLevelItem(item)
-            return index >= 0 and Path(path) == self.batch_paths[index]  # Original source drag-out.
+            return index >= 0 and Path(path) == self.batch_paths[index] and Path(path).is_file()
         index = self.queue_list.indexOfTopLevelItem(parent)
         if index < 0 or parent.data(2, Qt.UserRole) not in ('VERIFIED', 'VERIFIED EXISTING'):
             return False
-        directory = self.stem_output_dir(index)
-        try:
-            if self.output_conflicts_with_source(index, directory, list(directory.iterdir())):
-                return False
-        except OSError:
+        verified = self._verified.get(self._row_ids[index])
+        if verified is None:
             return False
-        paths = self.verified_stem_paths(self.batch_paths[index], self.batch_presets[index], directory)
-        return bool(paths and Path(path) in paths.values())
+        snapshot, paths = verified
+        if file_snapshot(self.batch_paths[index], self.stem_output_dir(index)) != snapshot:
+            self.refresh_existing_status(index)
+            return False
+        return Path(path) in paths.values()
 
     def refresh_stem_children(self, index):
         if not 0 <= index < len(self.batch_paths):
@@ -705,7 +774,7 @@ class Producer(QMainWindow):
         expanded = parent.isExpanded()
         parent.takeChildren()
         directory = self.stem_output_dir(index)
-        if self.inspect_existing_output(index) == 'SOURCE CONFLICT':
+        if parent.data(2, Qt.UserRole) == 'SOURCE CONFLICT':
             parent.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless)
             return
         source = self.batch_paths[index]
@@ -720,8 +789,9 @@ class Producer(QMainWindow):
                                key=lambda p: p.name.casefold()) if directory.is_dir() else []
         except OSError:
             stems = []
+        verified = self._verified.get(self._row_ids[index])
         ready = (parent.data(2, Qt.UserRole) in ('VERIFIED', 'VERIFIED EXISTING')
-                 and self.verified_stem_paths(source, preset, directory) is not None)
+                 and verified is not None and file_snapshot(source, directory) == verified[0])
         for path in stems:
             child = QTreeWidgetItem([self.stem_display_name(path), "", "Ready" if ready else "Unverified"])
             child.setToolTip(0, str(path))
@@ -735,12 +805,17 @@ class Producer(QMainWindow):
     def set_job_preset(self, index, preset):
         if not self.batch_active and 0 <= index < len(self.batch_presets):
             self.batch_presets[index] = preset
-            self.refresh_stem_children(index)
             self.refresh_existing_status(index)
 
     def clear_batch(self):
         if self.batch_active:
             return
+        for check in self._checks.values():
+            check[1].set()
+        self._checks.clear()
+        self._verified.clear()
+        self._generations.clear()
+        self._row_ids.clear()
         self.batch_paths.clear()
         self.batch_presets.clear()
         self.batch_custom_output = None
@@ -808,7 +883,12 @@ class Producer(QMainWindow):
             combo = self.queue_list.itemWidget(self.queue_list.topLevelItem(index), 1)
             if combo:
                 combo.setEnabled(False)
-        for index in range(len(self.batch_paths)):
+        for index, row_id in enumerate(self._row_ids):
+            previous = self._checks.pop(row_id, None)
+            if previous:
+                previous[1].set()
+            self._generations[row_id] += 1
+            self._verified.pop(row_id, None)
             self.set_batch_label(index, "QUEUED")
         self.batch_start_button.setEnabled(False)
         self.clear_queue_button.setEnabled(False)
@@ -820,8 +900,10 @@ class Producer(QMainWindow):
 
     def inspect_existing_output(self, index):
         """Classify an output directory without deleting or modifying files."""
-        source = self.batch_paths[index]
-        directory = self.stem_output_dir(index)
+        return self.inspect_output(self.batch_paths[index], self.batch_presets[index], self.stem_output_dir(index))
+
+    @classmethod
+    def inspect_output(cls, source, preset, directory):
         if not source.is_file():
             return 'MISSING SOURCE'
         try:
@@ -830,12 +912,20 @@ class Producer(QMainWindow):
             if not directory.is_dir():
                 return 'BLOCKED'
             entries = list(directory.iterdir())
-            if self.output_conflicts_with_source(index, directory, entries):
+            marker = directory / OWNER_FILE
+            if marker.exists() or marker.is_symlink():
+                try:
+                    conflict = json.loads(marker.read_text()) != cls.output_owner(source, preset)
+                except (OSError, ValueError):
+                    conflict = True
+            else:
+                conflict = bool(entries)
+            if conflict:
                 return 'SOURCE CONFLICT'
             entries = [entry for entry in entries if entry.name != OWNER_FILE]
             if not entries:
                 return 'READY'
-            expected = self.expected_stem_paths(source, self.batch_presets[index], directory)
+            expected = cls.expected_stem_paths(source, preset, directory)
             if expected is not None and len(entries) == len(expected) and all(
                     p.is_file() and p.stat().st_size > 0 for p in expected.values()):
                 return 'EXISTING STEMS'
@@ -843,20 +933,68 @@ class Producer(QMainWindow):
         except OSError:
             return 'BLOCKED'
 
-    def refresh_existing_status(self, index):
+    def refresh_existing_status(self, index, purpose='import'):
         """Inspect existing results on import/preset change, without processing."""
-        state = self.inspect_existing_output(index)
-        if state == 'EXISTING STEMS':
-            state = ('VERIFIED EXISTING' if self.verified_stem_paths(
-                self.batch_paths[index], self.batch_presets[index], self.stem_output_dir(index))
-                else 'PARTIAL / UNKNOWN')
-        elif state == 'PARTIAL / UNKNOWN' and self.expected_stem_paths(
-                self.batch_paths[index], self.batch_presets[index], self.stem_output_dir(index)) is None:
-            state = 'UNVERIFIED'
-        if state == 'READY':
-            state = 'QUEUED'
-        self.set_batch_label(index, state)
-        return state
+        if self._closing:
+            return 'UNVERIFIED'
+        if not 0 <= index < len(self._row_ids):
+            return 'UNVERIFIED'
+        row_id = self._row_ids[index]
+        previous = self._checks.pop(row_id, None)
+        if previous:
+            previous[1].set()
+        self._generations[row_id] += 1
+        generation = self._generations[row_id]
+        self._verified.pop(row_id, None)
+        self.set_batch_label(index, 'CHECKING')
+        cancelled = threading.Event()
+        check = OutputCheck(row_id, generation, cancelled, self.inspect_output,
+                            self.verified_stem_paths, self.batch_paths[index],
+                            self.batch_presets[index], self.stem_output_dir(index))
+        check.signals.done.connect(self._check_finished)
+        self._checks[row_id] = (check, cancelled, purpose)
+        self._check_pool.start(check)
+        return 'CHECKING'
+
+    def _check_finished(self, row_id, generation, result):
+        if self._closing:
+            return
+        if self._generations.get(row_id) != generation or row_id not in self._row_ids:
+            return
+        check = self._checks.pop(row_id, None)
+        purpose = check[2] if check else 'import'
+        index = self._row_ids.index(row_id)
+        state, paths, snapshot = result
+        if state == 'VERIFIED EXISTING' and paths and snapshot == file_snapshot(self.batch_paths[index], self.stem_output_dir(index)):
+            self._verified[row_id] = (snapshot, paths)
+        elif state == 'VERIFIED EXISTING':
+            state = 'PARTIAL / UNKNOWN'
+        if purpose == 'postprocess' and self.batch_active and index == self.batch_index:
+            if self.cancel_requested:
+                self.set_batch_label(index, 'CANCELLED')
+                return
+            if state == 'VERIFIED EXISTING':
+                state = 'VERIFIED'
+                self.append_log('Output check PASSED: expected WAV stems and audio metadata verified.')
+            else:
+                state = 'CHECK OUTPUT'
+                self.append_log('Output check FAILED: expected WAV stems or compatible audio metadata missing.')
+            self.status.setText(state)
+            self.stage_label.setText(state)
+            self.set_batch_label(index, state)
+            QTimer.singleShot(0, self.run_next_batch)
+        elif purpose == 'preflight' and self.batch_active and index == self.batch_index:
+            if state == 'QUEUED':
+                self._start_current_job()
+            else:
+                self.set_batch_label(index, state)
+                source = self.batch_paths[index]
+                target = self.stem_output_dir(index)
+                advice = ' Inspect that folder and move it aside before retrying.' if state == 'SOURCE CONFLICT' else ''
+                self.append_log(f'Skipped {source.name}: {state.lower()} at {target}; existing output was not changed.{advice}')
+                QTimer.singleShot(0, self.run_next_batch)
+        else:
+            self.set_batch_label(index, state)
 
     def run_next_batch(self):
         if not self.batch_active:
@@ -877,17 +1015,12 @@ class Producer(QMainWindow):
             self.status.setText("QUEUE FINISHED — CHECK ROW STATUS")
             self.unlock_queue_presets()
             return
+        self.refresh_existing_status(self.batch_index, purpose='preflight')
+
+    def _start_current_job(self):
         source = self.batch_paths[self.batch_index]
         preset = self.batch_presets[self.batch_index]
         target = self.stem_output_dir(self.batch_index)
-        existing = self.inspect_existing_output(self.batch_index)
-        if existing != 'READY':
-            self.set_batch_label(self.batch_index, existing)
-            advice = ' Inspect that folder and move it aside before retrying.' if existing == 'SOURCE CONFLICT' else ''
-            self.append_log(f'Skipped {source.name}: {existing.lower()} at {target}; '
-                            f'existing output was not changed.{advice}')
-            QTimer.singleShot(0, self.run_next_batch)
-            return
         self.set_batch_label(self.batch_index, "PROCESSING")
         self.presets.setCurrentIndex(self.presets.findData(preset))
         self.input.setText(str(source))
@@ -990,15 +1123,34 @@ class Producer(QMainWindow):
                 QTimer.singleShot(0, self.run_next_batch)
 
     @staticmethod
-    def probe_audio(path):
+    def probe_audio(path, timeout=12, cancelled=None):
         command = [
             "ffprobe", "-v", "error", "-select_streams", "a:0",
             "-show_entries", "stream=codec_name,sample_rate,channels,bits_per_sample:format=duration",
             "-of", "json", str(path),
         ]
         import json
-        result = subprocess.run(command, capture_output=True, text=True, timeout=12, check=True)
-        payload = json.loads(result.stdout)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                if cancelled is not None and cancelled.is_set():
+                    raise subprocess.TimeoutExpired(command, timeout)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                try:
+                    stdout, stderr = process.communicate(timeout=min(.1, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+            if process.returncode:
+                raise subprocess.CalledProcessError(process.returncode, command, stdout, stderr)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
+        payload = json.loads(stdout)
         stream = (payload.get("streams") or [{}])[0]
         return {
             "duration": float(payload["format"]["duration"]),
@@ -1006,19 +1158,6 @@ class Producer(QMainWindow):
             "channels": int(stream["channels"]),
             "codec": stream.get("codec_name", "unknown"),
         }
-
-    def validate_output(self):
-        """Validate every expected WAV before marking a supported run verified."""
-        preset = self.presets.currentData()
-        if preset not in FOUR_STEM_PRESETS and preset != 'drum-parts':
-            self.append_log("Output check: manual inspection required for this preset.")
-            return None
-        source = Path(self.input.text().strip()).expanduser()
-        if self.verified_stem_paths(source, preset, self.current_output) is None:
-            self.append_log("Output check FAILED: expected WAV stems or compatible audio metadata missing.")
-            return False
-        self.append_log("Output check PASSED: expected WAV stems and audio metadata verified.")
-        return True
 
     def finished(self, code, exit_status):
         if self.process is None:
@@ -1028,16 +1167,11 @@ class Producer(QMainWindow):
             self.status.setText("CANCELLED")
             self.append_log("Cancelled. Partial output may remain.")
         elif code == 0 and exit_status == QProcess.NormalExit:
-            validation = self.validate_output()
-            if validation is True:
-                self.status.setText("VERIFIED")
-                self.append_log("Separation finished successfully; output verified.")
-            elif validation is None:
+            if self.presets.currentData() not in FOUR_STEM_PRESETS | {'drum-parts'}:
                 self.status.setText("COMPLETE — UNVERIFIED")
                 self.append_log("Separation exited successfully; inspect this preset's outputs manually.")
             else:
-                self.status.setText("CHECK OUTPUT")
-                self.append_log("Processing exited successfully, but output verification failed.")
+                self.status.setText("CHECKING")
         else:
             self.status.setText("FAILED")
             self.append_log(f"Separation failed (exit code {code}).")
@@ -1047,6 +1181,9 @@ class Producer(QMainWindow):
         self.process = None
         if self.batch_active:
             self.set_batch_label(self.batch_index, self.status.text())
+            if self.status.text() == 'CHECKING':
+                self.refresh_existing_status(self.batch_index, purpose='postprocess')
+                return
             if self.cancel_requested:
                 self.batch_active = False
                 self.batch_index = -1
@@ -1082,6 +1219,14 @@ class Producer(QMainWindow):
     def cancel(self):
         if self.process is None:
             if self.batch_active:
+                if 0 <= self.batch_index < len(self._row_ids):
+                    row_id = self._row_ids[self.batch_index]
+                    check = self._checks.pop(row_id, None)
+                    if check:
+                        check[1].set()
+                    self._generations[row_id] += 1
+                    self._verified.pop(row_id, None)
+                    self.set_batch_label(self.batch_index, 'CANCELLED')
                 self.batch_active = False
                 self.batch_index = -1
                 self.cancel_requested = True
@@ -1125,6 +1270,12 @@ class Producer(QMainWindow):
             if answer != QMessageBox.Yes:
                 event.ignore()
                 return
+        self._closing = True
+        for check, cancelled, _ in self._checks.values():
+            cancelled.set()
+            check.signals.done.disconnect(self._check_finished)
+        self._checks.clear()
+        if self.process is not None and self.process.state() != QProcess.NotRunning:
             self.batch_active = False  # Never launch the next job while closing.
             process = self.process
             self.cancel()
