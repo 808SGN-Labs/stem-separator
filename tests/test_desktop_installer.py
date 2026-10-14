@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated regression tests for the source-checkout desktop installer."""
+"""Isolated regression tests for the installed GUI desktop entry."""
 import os
 import subprocess
 import tempfile
@@ -16,6 +16,10 @@ class DesktopInstallerTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.xdg = Path(self.tmp.name) / "data"
         self.entry = self.xdg / "applications" / "808sgn-stemlab.desktop"
+        self.launcher = self.xdg / "808sgn-stem-lab/app/scripts/stemlab-gui"
+        self.launcher.parent.mkdir(parents=True)
+        self.launcher.write_text("#!/bin/sh\nexit 0\n")
+        self.launcher.chmod(0o755)
         self.env = dict(os.environ, XDG_DATA_HOME=str(self.xdg))
 
     def run_installer(self, *args, success=True):
@@ -32,7 +36,7 @@ class DesktopInstallerTests(unittest.TestCase):
         self.assertIn("[Desktop Entry]", entry)
         self.assertIn("Terminal=false", entry)
         self.assertIn("Name=808SGN StemLab", entry)
-        self.assertIn(str(ROOT / "scripts" / "stemlab-gui"), entry)
+        self.assertIn(str(self.launcher), entry)
         self.run_installer()
         self.assertEqual(entry, self.entry.read_text())
         self.run_installer("--remove")
@@ -53,6 +57,18 @@ class DesktopInstallerTests(unittest.TestCase):
         self.run_installer(success=False)
         self.run_installer("--remove", success=False)
         self.assertEqual(target.read_text(), "[Desktop Entry]\nName=Other\n")
+
+    def test_missing_installed_launcher_is_actionable(self):
+        self.launcher.unlink()
+        result = self.run_installer(success=False)
+        self.assertIn("Install the GUI first", result.stderr)
+        self.assertFalse(self.entry.exists())
+
+    def test_previous_checkout_entry_can_be_upgraded(self):
+        self.entry.parent.mkdir(parents=True)
+        self.entry.write_text(f"[Desktop Entry]\n# StemLab-Source: {ROOT}\n")
+        self.run_installer()
+        self.assertIn(str(self.launcher), self.entry.read_text())
 
 
 if __name__ == "__main__":

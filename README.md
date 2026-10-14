@@ -100,52 +100,42 @@ Suno can export native stems, and commercial services such as Voice.ai can separ
 
 The timings below are therefore conservative. A supported NVIDIA GPU should be substantially faster.
 
-## Producer GUI (Linux source checkout)
+## Installation (private Linux alpha)
 
-The existing `scripts/install.sh` installs the **separation CLI backend only**. The
-producer GUI requires a separate Python environment with PySide6 (QtWidgets and
-QtMultimedia). For a local Linux checkout:
-
-```bash
-python3 -m venv .venv-gui
-.venv-gui/bin/python -m pip install PySide6
-bash scripts/stemlab-gui
-```
-
-The launcher checks its Python environment, Qt Multimedia, `ffprobe`, and
-the separation wrapper before starting. Override the GUI Python interpreter
-with `STEM_LAB_GUI_PYTHON=/path/to/python` if needed. Actual stem processing
-still requires the CLI backend from `scripts/install.sh` or an existing
-`STEM_LAB_VENV`. This is a source-checkout launcher, **not a packaged Linux
-installer or verified distributable**. No system-wide files are installed by
-the launcher.
-
-### Linux Mint application menu (source checkout)
-
-After verifying `bash scripts/stemlab-gui`, register a per-user application
-shortcut with no root access:
+Prerequisites: Linux x86_64, Python 3.12 available to `uv`, `uv` on `PATH`,
+and FFmpeg including `ffprobe` on `PATH`. Install dependencies while connected;
+the installer does not download models, install system packages, or invoke
+`sudo`. From a checkout:
 
 ```bash
-bash -n scripts/install-desktop.sh
-bash scripts/install-desktop.sh
-python3 -m unittest discover -s tests -p 'test_desktop_installer.py' -v
+bash scripts/install.sh
+"${XDG_DATA_HOME:-$HOME/.local/share}/808sgn-stem-lab/app/scripts/stemlab-gui"
+bash "${XDG_DATA_HOME:-$HOME/.local/share}/808sgn-stem-lab/app/scripts/install-desktop.sh"  # optional menu entry
 ```
 
-The desktop installer refuses to replace foreign application entries or
-symlinked entries. Its test suite uses an isolated temporary XDG data directory,
-so it does not change the real application menu.
+The installer creates one private Python environment for the GUI and CPU
+separator in `$XDG_DATA_HOME/808sgn-stem-lab` (or `~/.local/share`), and copies
+the GUI, wrapper, launcher, and code license into `app/`. The menu entry points
+to this installed copy, so the checkout can move. It refuses to replace a
+foreign desktop entry or unowned app directory. No system-wide files are
+installed. Remove the matching menu entry with
+`bash "${XDG_DATA_HOME:-$HOME/.local/share}/808sgn-stem-lab/app/scripts/install-desktop.sh" --remove`;
+this leaves the environment,
+outputs, and model cache untouched. `STEM_LAB_GUI_PYTHON` can override the
+launcher interpreter for development.
 
-The menu entry launches the current checkout using an absolute path; moving the
-checkout requires reinstalling the entry. It does not bundle Python, models or
-separation dependencies. Remove only the matching StemLab-generated shortcut:
-
-```bash
-bash scripts/install-desktop.sh --remove
-```
+Models are **not bundled**. The wrapper uses
+`${XDG_CACHE_HOME:-$HOME/.cache}/808sgn-stem-lab/models` by default, or
+`STEM_LAB_MODELS`. The first run of an uncached model may download weights;
+prepare an authorized cache before disconnected use. The offline tests use
+stubs and do not prove real model inference. Direct Python package versions
+are pinned in `scripts/install.sh`, but transitive dependencies and the Python
+patch version are not yet locked; a real clean-machine install and cached-model
+GUI acceptance remain alpha release checks.
 
 ### Offline installer preflight
 
-The CLI installer can be checked without downloading dependencies or changing
+The installer can be checked without downloading dependencies or changing
 the actual user installation. The tests replace `uv` and `ffmpeg` with
 temporary stubs and redirect `XDG_DATA_HOME` to a temporary directory:
 
@@ -153,9 +143,10 @@ temporary stubs and redirect `XDG_DATA_HOME` to a temporary directory:
 python3 -m unittest discover -s tests -p 'test_install_preflight.py' -v
 ```
 
-These tests verify installation paths, the pinned `audio-separator[cpu]`
-version and missing-FFmpeg handling. They do **not** prove fresh-system
-compatibility, successful real dependency installation, or offline inference.
+These tests verify installation paths, pinned direct dependencies, the copied
+GUI, a relocatable desktop entry, and missing-FFmpeg handling. They do **not**
+prove fresh-system compatibility, successful real dependency installation,
+Qt audio playback, or offline inference.
 
 ### Isolated offline wrapper contract test
 
@@ -468,7 +459,9 @@ The practical verdict is straightforward: use de-reverb only when the original a
 
 ## Local GUI MVP
 
-The new Qt producer preview is available alongside the legacy Tkinter GUI. From the repository root, using the existing PySide6 QC environment:
+The Qt producer GUI is available alongside the legacy Tkinter GUI. Use the
+private alpha installation above for the installed launcher. For source
+development with an existing PySide6 environment:
 
 ```bash
 .venv-gui/bin/python gui/producer_qt.py
@@ -496,7 +489,7 @@ The legacy Tkinter interface remains available at `python3 gui/stem_lab_gui.py` 
 | Drum Parts | DrumSep | Isolated drum input only |
 | Vocal De-Reverb | BS-RoFormer de-reverb | Isolated vocal input only |
 
-The legacy Tkinter GUI provides source/output selection and single-job controls. The separate Qt Producer preview is queue-first, with per-job presets, expandable file-based results and a collapsible process log. Preview and single-file Source/Stem drag-out into Bitwig have been confirmed on Linux Mint; these changes remain in the uncommitted development tree. Reliable whole-batch progress/ETA, packaging, queue recovery and release-grade error UX are not complete.
+The legacy Tkinter GUI provides source/output selection and single-job controls. The Qt Producer is queue-first, with per-job presets, expandable file-based results and a collapsible process log. Preview and single-file Source/Stem drag-out into Bitwig have been confirmed on Linux Mint. Reliable whole-batch progress/ETA, a fully locked package, queue recovery and release-grade error UX are not complete.
 
 ## Conclusions
 
@@ -544,6 +537,7 @@ Repository licensing:
 
 - **Article and documentation:** Creative Commons Attribution 4.0
 - **Scripts and GUI code:** MIT License
+- **Installed third-party packages:** retain their own licenses; PySide6 reports LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only. Review the selected license and bundled Qt notices before sharing an installer or environment.
 - **Audio examples:** Excluded from the repository licenses and all rights reserved unless explicitly licensed otherwise
 
 ---
