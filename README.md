@@ -157,6 +157,19 @@ These tests verify installation paths, the pinned `audio-separator[cpu]`
 version and missing-FFmpeg handling. They do **not** prove fresh-system
 compatibility, successful real dependency installation, or offline inference.
 
+### Isolated offline wrapper contract test
+
+Test wrapper routing without networking, downloads or actual model inference:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_offline_wrapper.py' -v
+```
+
+This uses a disposable stub `audio-separator`, temporary input/output and
+model-cache paths. It checks command arguments and failure behavior; it does
+**not** demonstrate that the real separator can infer offline from cached
+weights. That still requires a sandboxed real run with a preloaded model cache.
+
 ## Manual installation (advanced)
 
 The quick-start installer above is recommended. If you use the manual location below, set `STEM_LAB_VENV` so the wrapper can find it. Export this variable again in each new terminal session before using the wrapper.
