@@ -143,6 +143,20 @@ separation dependencies. Remove only the matching StemLab-generated shortcut:
 bash scripts/install-desktop.sh --remove
 ```
 
+### Offline installer preflight
+
+The CLI installer can be checked without downloading dependencies or changing
+the actual user installation. The tests replace `uv` and `ffmpeg` with
+temporary stubs and redirect `XDG_DATA_HOME` to a temporary directory:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_install_preflight.py' -v
+```
+
+These tests verify installation paths, the pinned `audio-separator[cpu]`
+version and missing-FFmpeg handling. They do **not** prove fresh-system
+compatibility, successful real dependency installation, or offline inference.
+
 ## Manual installation (advanced)
 
 The quick-start installer above is recommended. If you use the manual location below, set `STEM_LAB_VENV` so the wrapper can find it. Export this variable again in each new terminal session before using the wrapper.

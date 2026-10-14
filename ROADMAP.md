@@ -90,24 +90,35 @@ presets exist.
 
 Producer queue UX / HMI target and implementation gates: [docs/PRODUCER-QUEUE-UX.md](docs/PRODUCER-QUEUE-UX.md).
 
-2026-10-13 update: the user confirmed 11 local Qt regression tests and a
-three-file real CPU batch (Drum Parts, Fast, Balanced). All jobs exited
-successfully; two four-stem jobs were verified and expandable output rows
-showed the actual 14 generated WAV files. Direct single-stem Qt file-URL drag-out to Bitwig was confirmed
-working after a mouse-drag correction. Preview and source drag-out were subsequently confirmed by the user on Linux Mint. Synthetic Drum Parts output validation and refreshed local Qt regression passed (16/16 tests on 2026-10-13). Fresh real Drum Parts validation remains open. Cancel/failure/skip acceptance and release packaging
-are still open. See `docs/PRODUCER-QUEUE-UX.md`. No release-readiness claim.
+## October 2026 — Producer GUI Alpha (implemented ahead of schedule)
 
-## January 2027 — Producer GUI Alpha
+- [x] PySide6 / Qt producer interface
+- [x] Drag-and-drop import and per-file presets
+- [x] CPU batch processing, process progress and cancellation
+- [x] Stem preview and Bitwig-compatible source/stem drag-out
+- [x] Four-stem WAV metadata validation and synthetic six-part drum validation
+- [x] Existing-output inspection and safe non-overwrite behavior
+- [x] Eight persistent appearance themes
+- [x] Source-checkout GUI launcher and Linux Mint desktop menu integration
+- [ ] Revalidate six real Drum Parts WAVs end-to-end
+- [ ] Verify fresh Linux installation and offline operation
+- [ ] Produce a distributable, reproducible Linux package
+- [ ] Offline-aware model manager (future capability)
 
-- [ ] PySide6 / Qt producer interface
-- [ ] Drag-and-drop input
-- [ ] Evidence-based task presets
-- [ ] Separation progress and cancellation
-- [ ] Stem audition
-- [ ] Aligned WAV export
-- [ ] Bitwig-friendly drag/export workflow
-- [ ] Batch / overnight queue
-- [ ] Offline-aware model manager
+Acceptance evidence as of 2026-10-14: 22 producer GUI regression tests were
+reported passing on Linux Mint, plus two desktop-installer tests. A real
+three-file CPU batch (Drum Parts, Fast, Balanced) generated 14 WAVs. Four-stem
+outputs and Bitwig drag/preview were checked in a live producer workflow.
+A new real six-part metadata validation run, fresh-machine installation and
+offline model-cache validation are still open. Synthetic tests do not replace
+a release acceptance run. See `docs/PRODUCER-QUEUE-UX.md`.
+
+## January 2027 — Producer UX Follow-up
+
+- [ ] Resolve findings from multi-file desktop visual acceptance
+- [ ] Evaluate persistent queue restoration only if workflows require it
+- [ ] Review UI accessibility and scaling
+- [ ] Validate extended/overnight producer sessions
 
 Research/QC tools and the producer-facing workflow should remain separable.
 
