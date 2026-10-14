@@ -103,7 +103,8 @@ Producer queue UX / HMI target and implementation gates: [docs/PRODUCER-QUEUE-UX
 - [ ] Revalidate six real Drum Parts WAVs end-to-end
 - [ ] Verify fresh Linux installation (clean-machine acceptance)
 - [x] Verify real Balanced CPU inference with network namespace disabled
-- [ ] Verify cached-model inference with read-only cache and WAV metadata checks
+- [x] Validate four real Balanced offline output WAV metadata (44.1 kHz, stereo, 10.00 s, PCM 16-bit)
+- [ ] Verify cached-model inference with read-only cache
 - [ ] Produce a distributable, reproducible Linux package
 - [ ] Offline-aware model manager (future capability)
 
@@ -117,8 +118,9 @@ using `balanced` / `htdemucs.yaml`, audio-separator 0.47.0 and Python 3.12.14
 inside `sudo unshare --net`, running inference as the normal user. CPU inference
 finished in 12 seconds and emitted four WAV files (Bass, Drums, Other, Vocals)
 using the existing ~1.9 GB cache. This confirms one real network-disconnected
-inference path, not full GUI/preset offline acceptance. The cache was writable,
-and output WAV metadata was not independently inspected. Synthetic tests do
+inference path, not full GUI/preset offline acceptance. The cache was writable. A subsequent network-isolated Balanced run produced
+four WAVs independently checked with ffprobe: PCM 16-bit, 44.1 kHz, stereo,
+10.00 seconds each. Read-only cache acceptance remains open. Synthetic tests do
 not replace release acceptance. See `docs/PRODUCER-QUEUE-UX.md`.
 
 ## January 2027 — Producer UX Follow-up
