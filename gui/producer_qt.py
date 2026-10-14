@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """StemLab producer interface — local Qt frontend for scripts/stem-separate."""
 
+import json
 import os
 import re
 import subprocess
@@ -22,6 +23,7 @@ WRAPPER = ROOT / "scripts" / "stem-separate"
 STEP_PROGRESS = re.compile(r"(\d{1,3})%\|[^\r\n]*?\|\s*(\d+)\s*/\s*(\d+)")
 FOUR_STEM_PRESETS = {"balanced", "4stems", "maximum"}
 AUDIO_SUFFIXES = {".wav", ".flac", ".mp3", ".m4a", ".ogg", ".aiff", ".aif"}
+OWNER_FILE = ".stemlab-source.json"
 
 PRESETS = [
     ("Balanced · Recommended", "balanced", "4 stems · Best practical CPU starting point"),
@@ -497,7 +499,7 @@ class Producer(QMainWindow):
         value = self.input.text().strip()
         if value:
             source = Path(value).expanduser()
-            self.output.setText(str(source.parent / (source.stem + "_stemlab") / self.presets.currentData()))
+            self.output.setText(str(self.default_output_dir(source, self.presets.currentData())))
         else:
             self.output.clear()
 
@@ -603,7 +605,31 @@ class Producer(QMainWindow):
         preset = self.batch_presets[index]
         if self.batch_custom_output and len(self.batch_paths) == 1:
             return Path(self.batch_custom_output).expanduser()
-        return source.parent / (source.stem + "_stemlab") / preset
+        return self.default_output_dir(source, preset)
+
+    @staticmethod
+    def default_output_dir(source, preset):
+        root = source.parent / (source.stem + "_stemlab")
+        # Keep existing lowercase .wav outputs at their original path. Other
+        # filenames need their own directory so they cannot claim those stems.
+        if source.suffix != ".wav":
+            root /= source.name
+        return root / preset
+
+    @staticmethod
+    def output_owner(source, preset):
+        return {"source": str(source.resolve()), "preset": preset}
+
+    def output_conflicts_with_source(self, index, directory, entries):
+        source = self.batch_paths[index]
+        marker = directory / OWNER_FILE
+        if marker.exists() or marker.is_symlink():
+            try:
+                return json.loads(marker.read_text()) != self.output_owner(source, self.batch_presets[index])
+            except (OSError, ValueError):
+                return True
+        # Legacy output has no reliable record of which source created it.
+        return bool(entries)
 
     def refresh_stem_children(self, index):
         if not 0 <= index < len(self.batch_paths):
@@ -612,6 +638,9 @@ class Producer(QMainWindow):
         expanded = parent.isExpanded()
         parent.takeChildren()
         directory = self.stem_output_dir(index)
+        if self.inspect_existing_output(index) == 'SOURCE CONFLICT':
+            parent.setChildIndicatorPolicy(QTreeWidgetItem.DontShowIndicatorWhenChildless)
+            return
         try:
             stems = sorted((p for p in directory.iterdir()
                             if p.is_file() and p.suffix.lower() == ".wav" and p.stat().st_size > 0),
@@ -639,20 +668,22 @@ class Producer(QMainWindow):
             return
         self.batch_paths.clear()
         self.batch_presets.clear()
+        self.batch_custom_output = None
         self.queue_list.clear()
 
     def set_batch_label(self, index, state):
         item = self.queue_list.topLevelItem(index)
         label = 'Unverified' if state.upper() == 'COMPLETE — UNVERIFIED' else state.title()
         item.setText(2, label)
-        item.setToolTip(2, label)
+        item.setToolTip(2, ("Output source or preset cannot be confirmed. Inspect the existing folder before retrying."
+                            if state == 'SOURCE CONFLICT' else label))
         item.setData(2, Qt.UserRole, state)
         key = state.upper()
         if key in ('VERIFIED', 'VERIFIED EXISTING', 'EXISTING STEMS'):
             color = '#83d2b5'
         elif key in ('PROCESSING',):
             color = '#75cfc5'
-        elif key in ('FAILED', 'BLOCKED', 'MISSING SOURCE'):
+        elif key in ('FAILED', 'BLOCKED', 'MISSING SOURCE', 'SOURCE CONFLICT'):
             color = '#ee9b98'
         elif key in ('PARTIAL / UNKNOWN', 'UNVERIFIED', 'COMPLETE — UNVERIFIED'):
             color = '#e2bd83'
@@ -678,6 +709,21 @@ class Producer(QMainWindow):
             self.batch_paths.append(resolved)
             self.batch_presets.append(self.presets.currentData())
             self.add_queue_row(resolved)
+        self.batch_custom_output = ((self.output.text().strip() if self.output_user_set
+                                     else self.batch_custom_output) if len(self.batch_paths) == 1 else None)
+        targets = {}
+        for index in range(len(self.batch_paths)):
+            target = self.stem_output_dir(index).resolve()
+            if target in targets:
+                first = targets[target]
+                self.set_batch_label(first, 'SOURCE CONFLICT')
+                self.set_batch_label(index, 'SOURCE CONFLICT')
+                QMessageBox.warning(self, "Output conflict",
+                                    f"{self.batch_paths[first].name} and {self.batch_paths[index].name} target {target}. "
+                                    "Rename one source or process the files separately before retrying.")
+                self.batch_custom_output = None
+                return
+            targets[target] = index
         self.log.clear()
         self.batch_active = True
         self.batch_index = -1
@@ -687,7 +733,6 @@ class Producer(QMainWindow):
             combo = self.queue_list.itemWidget(self.queue_list.topLevelItem(index), 1)
             if combo:
                 combo.setEnabled(False)
-        self.batch_custom_output = (self.output.text().strip() if len(self.batch_paths) == 1 and self.output_user_set else None)
         for index in range(len(self.batch_paths)):
             self.set_batch_label(index, "QUEUED")
         self.batch_start_button.setEnabled(False)
@@ -710,6 +755,9 @@ class Producer(QMainWindow):
             if not directory.is_dir():
                 return 'BLOCKED'
             entries = list(directory.iterdir())
+            if self.output_conflicts_with_source(index, directory, entries):
+                return 'SOURCE CONFLICT'
+            entries = [entry for entry in entries if entry.name != OWNER_FILE]
             if not entries:
                 return 'READY'
             if self.batch_presets[index] in FOUR_STEM_PRESETS:
@@ -770,7 +818,9 @@ class Producer(QMainWindow):
         existing = self.inspect_existing_output(self.batch_index)
         if existing != 'READY':
             self.set_batch_label(self.batch_index, existing)
-            self.append_log(f'Skipped {source.name}: {existing.lower()}; existing output was not changed.')
+            advice = ' Inspect that folder and move it aside before retrying.' if existing == 'SOURCE CONFLICT' else ''
+            self.append_log(f'Skipped {source.name}: {existing.lower()} at {target}; '
+                            f'existing output was not changed.{advice}')
             QTimer.singleShot(0, self.run_next_batch)
             return
         self.set_batch_label(self.batch_index, "PROCESSING")
@@ -807,23 +857,26 @@ class Producer(QMainWindow):
             QMessageBox.warning(self, "Output missing", "Select an output directory.")
             return
         dest = Path(output_text).expanduser().resolve()
+        owner = self.output_owner(source, self.presets.currentData())
         try:
             if dest == source.resolve() or dest == source.parent.resolve():
                 QMessageBox.warning(self, "Unsafe output", "Choose a separate output directory.")
                 return
-            if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
-                if self.batch_active:
-                    self.append_log("Output is no longer empty; refusing to overwrite it.")
+            marker = dest / OWNER_FILE
+            if dest.exists():
+                if not dest.is_dir():
+                    self.append_log("Output is not a directory; refusing to overwrite it.")
                     return
-                answer = QMessageBox.question(
-                    self, "Non-empty output folder",
-                    "This folder contains files. Continue? Existing files may be overwritten.",
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-                )
-                if answer != QMessageBox.Yes:
+                entries = list(dest.iterdir())
+                if entries and (len(entries) != 1 or entries[0] != marker
+                                or json.loads(marker.read_text()) != owner):
+                    self.append_log("Output is no longer empty or belongs to another source; choose a different folder.")
                     return
             dest.mkdir(parents=True, exist_ok=True)
-        except OSError as error:
+            if not marker.exists():
+                with marker.open('x') as stream:
+                    json.dump(owner, stream)
+        except (OSError, ValueError) as error:
             QMessageBox.critical(self, "Output error", str(error))
             return
 

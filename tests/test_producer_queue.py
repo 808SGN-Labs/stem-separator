@@ -1,10 +1,13 @@
 import importlib.util
+import json
 import os
+import subprocess
 import tempfile
 import time
 import unittest
+import wave
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 spec = importlib.util.spec_from_file_location('producer', Path(__file__).resolve().parents[1] / 'gui/producer_qt.py')
 m = importlib.util.module_from_spec(spec)
@@ -15,9 +18,13 @@ class QueueTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        self.audio_output_patch = patch.object(m, 'QAudioOutput', new_callable=MagicMock)
+        self.media_player_patch = patch.object(m, 'QMediaPlayer', new_callable=MagicMock)
+        self.audio_output_patch.start()
+        self.media_player_patch.start()
         self.w = m.Producer()
         self.backend = self.root / 'backend'
-        self.backend.write_text('#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\np=Path(sys.argv[3]); p.mkdir(parents=True,exist_ok=True)\n(p/"called").write_text(sys.argv[1])\n')
+        self.backend.write_text('#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\np=Path(sys.argv[3]); p.mkdir(parents=True,exist_ok=True)\n(p/"called").write_text(sys.argv[1])\nwith Path(__file__).with_name("backend_calls").open("a") as log: log.write("\\t".join(sys.argv[1:4]) + "\\n")\n')
         self.backend.chmod(0o755)
         self.wrapper = patch.object(m, 'WRAPPER', self.backend)
         self.wrapper.start()
@@ -26,9 +33,16 @@ class QueueTests(unittest.TestCase):
         self.w.deleteLater()
         app.processEvents()
         self.wrapper.stop()
+        self.media_player_patch.stop()
+        self.audio_output_patch.stop()
         self.tmp.cleanup()
     def audio(self, name):
         p=self.root/name; p.write_bytes(b'fixture'); return p
+    def backend_calls(self):
+        log = self.root / 'backend_calls'
+        return [line.split('\t') for line in log.read_text().splitlines()] if log.exists() else []
+    def mark_owned(self, directory, source, preset='balanced'):
+        (directory / m.OWNER_FILE).write_text(json.dumps(self.w.output_owner(source, preset)))
     def wait_done(self, timeout=6):
         deadline=time.monotonic()+timeout
         while self.w.batch_active and time.monotonic()<deadline:
@@ -39,6 +53,7 @@ class QueueTests(unittest.TestCase):
         self.w.add_paths([str(source)])
         target = self.root / 'song_stemlab' / 'balanced'
         target.mkdir(parents=True)
+        self.mark_owned(target, source)
         (target / 'Vocals.wav').write_bytes(b'content')
         (target / 'empty.wav').touch()
         (target / 'notes.txt').write_text('not a stem')
@@ -55,6 +70,7 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.w.inspect_existing_output(0), 'READY')
         target.mkdir(parents=True)
         self.assertEqual(self.w.inspect_existing_output(0), 'READY')
+        self.mark_owned(target, source)
         paths = [target / f'recovery_({stem})_htdemucs.wav' for stem in ('Bass', 'Drums', 'Other', 'Vocals')]
         for p in paths[:3]:
             p.write_bytes(b'fixture')
@@ -80,6 +96,7 @@ class QueueTests(unittest.TestCase):
         wav(source)
         directory = self.root / 'existing_stemlab' / 'balanced'
         directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
         stems = [directory / f'existing_({name})_htdemucs.wav' for name in ('Bass','Drums','Other','Vocals')]
         for path in stems: wav(path)
         self.w.add_paths([str(source)])
@@ -104,10 +121,12 @@ class QueueTests(unittest.TestCase):
         incomplete = self.audio('partial.wav')
         target = self.root / 'verified_stemlab' / 'balanced'
         target.mkdir(parents=True)
+        self.mark_owned(target, verified)
         for stem in ('Bass', 'Drums', 'Other', 'Vocals'):
             wav(target / f'verified_({stem})_htdemucs.wav')
         partial_dir = self.root / 'partial_stemlab' / 'balanced'
         partial_dir.mkdir(parents=True)
+        self.mark_owned(partial_dir, incomplete)
         (partial_dir / 'partial_(Bass)_htdemucs.wav').write_bytes(b'fixture')
         self.w.add_paths([str(ready), str(verified), str(incomplete)])
         tree = self.w.queue_list
@@ -264,13 +283,181 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(self.w.queue_list.topLevelItem(1).text(2),'Unverified')
         self.assertIn('a.wav',self.w.log.toPlainText())
         self.assertIn('b.wav',self.w.log.toPlainText())
+
+    def test_same_basename_files_run_to_distinct_destinations(self):
+        wav = self.root / 'song.wav'
+        mp3 = self.root / 'song.mp3'
+        with wave.open(str(wav), 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(44100)
+            out.writeframes(b'\0\0' * 44100)
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i',
+                        'sine=frequency=440:duration=1', str(mp3)], check=True)
+        self.assertNotEqual(self.w.probe_audio(wav)['codec'], self.w.probe_audio(mp3)['codec'])
+        self.w.add_paths([str(wav), str(mp3)])
+        self.assertNotEqual(self.w.stem_output_dir(0), self.w.stem_output_dir(1))
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual((self.w.stem_output_dir(0) / 'called').read_text(), 'balanced')
+        self.assertEqual((self.w.stem_output_dir(1) / 'called').read_text(), 'balanced')
+        self.assertEqual([call[1] for call in self.backend_calls()], [str(wav), str(mp3)])
+
+    def test_uppercase_wav_has_its_own_destination(self):
+        paths = [self.audio(name) for name in
+                 ('song.wav', 'song.mp3', 'song.WAV', 'song.MP3', 'SONG.wav', 'SONG.mp3')]
+        self.w.add_paths([str(path) for path in paths])
+        self.assertEqual(len({self.w.stem_output_dir(i).resolve() for i in range(len(paths))}), len(paths))
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual([call[1] for call in self.backend_calls()], [str(path) for path in paths])
+
+    def test_manual_start_refuses_existing_audio(self):
+        source = self.audio('manual.wav')
+        destination = self.root / 'manual-output'
+        destination.mkdir()
+        existing = destination / 'Vocals.wav'
+        existing.write_bytes(b'preserve')
+        self.w.set_input(str(source))
+        self.w.output.setText(str(destination))
+        self.w.start()
+        self.assertIsNone(self.w.process)
+        self.assertEqual(existing.read_bytes(), b'preserve')
+
+    def test_custom_output_reimport_and_preset_require_matching_owner(self):
+        first = self.audio('first.wav')
+        second = self.audio('second.wav')
+        destination = self.root / 'shared-output'
+        self.w.add_paths([str(first)])
+        self.w.output_user_set = True
+        self.w.output.setText(str(destination))
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(len(self.backend_calls()), 1)
+        self.assertEqual((destination / m.OWNER_FILE).is_file(), True)
+        self.assertEqual(self.w.inspect_existing_output(0), 'PARTIAL / UNKNOWN')
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(len(self.backend_calls()), 1)
+        combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1)
+        combo.setCurrentIndex(combo.findData('vocals'))
+        self.assertEqual(self.w.inspect_existing_output(0), 'SOURCE CONFLICT')
+        self.w.clear_batch()
+        self.w.add_paths([str(second)])
+        self.w.output_user_set = True
+        self.w.output.setText(str(destination))
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Source Conflict')
+        self.assertIn('move it aside before retrying', self.w.log.toPlainText())
+        self.assertEqual(len(self.backend_calls()), 1)
+        self.assertEqual((destination / 'called').read_text(), 'balanced')
+
+    def test_unmarked_legacy_stems_are_preserved_without_claiming_source(self):
+        source = self.audio('song.wav')
+        old_source = self.audio('song.mp3')
+        directory = self.root / 'song_stemlab' / 'balanced'
+        directory.mkdir(parents=True)
+        stems = [directory / f'song_({stem})_htdemucs.wav'
+                 for stem in ('Bass', 'Drums', 'Other', 'Vocals')]
+        for stem in stems:
+            stem.write_bytes(b'old mp3 result')
+        self.w.add_paths([str(source), str(old_source)])
+        self.assertEqual(self.w.inspect_existing_output(0), 'SOURCE CONFLICT')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).childCount(), 0)
+        self.assertEqual(self.w.inspect_existing_output(1), 'READY')
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual([call[1] for call in self.backend_calls()], [str(old_source)])
+        self.assertTrue(all(stem.read_bytes() == b'old mp3 result' for stem in stems))
+
+    def test_owned_empty_output_is_ready_then_partial_when_files_appear(self):
+        source = self.audio('song.wav')
+        self.w.add_paths([str(source)])
+        directory = self.w.stem_output_dir(0)
+        directory.mkdir(parents=True)
+        self.mark_owned(directory, source)
+        self.assertEqual(self.w.inspect_existing_output(0), 'READY')
+        (directory / 'incomplete.wav').write_bytes(b'partial')
+        self.assertEqual(self.w.inspect_existing_output(0), 'PARTIAL / UNKNOWN')
+
+    def test_duplicate_destination_preflight_blocks_queue(self):
+        first = self.audio('first.wav')
+        second = self.audio('second.wav')
+        self.w.add_paths([str(first), str(second)])
+        shared = self.root / 'shared'
+        with patch.object(self.w, 'stem_output_dir', return_value=shared), \
+                patch.object(m.QMessageBox, 'warning') as warning:
+            self.w.start_batch()
+        self.assertFalse(self.w.batch_active)
+        self.assertEqual(len(self.backend_calls()), 0)
+        self.assertFalse(shared.exists())
+        self.assertEqual(warning.call_count, 1)
+        self.assertIn('Rename one source', warning.call_args.args[2])
+
+    def test_multiple_queue_entries_ignore_single_custom_output(self):
+        first = self.audio('first.wav')
+        second = self.audio('second.wav')
+        destination = self.root / 'custom'
+        self.w.add_paths([str(first), str(second)])
+        self.w.output_user_set = True
+        self.w.output.setText(str(destination))
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(len(self.backend_calls()), 2)
+        self.assertFalse(destination.exists())
+        self.assertEqual({Path(call[2]) for call in self.backend_calls()},
+                         {self.w.default_output_dir(first, 'balanced'),
+                          self.w.default_output_dir(second, 'balanced')})
+
+    def test_folder_import_preserves_source_identity(self):
+        self.audio('song.wav')
+        self.audio('song.mp3')
+        self.w.add_paths([str(self.root)])
+        self.assertEqual({path.name for path in self.w.batch_paths}, {'song.wav', 'song.mp3'})
+        self.assertEqual(len({self.w.stem_output_dir(i) for i in range(2)}), 2)
+        self.w.start_batch()
+        self.wait_done()
+        self.assertTrue(all((self.w.stem_output_dir(i) / 'called').is_file() for i in range(2)))
+        self.assertEqual(len(self.backend_calls()), 2)
+
+    def test_reimport_and_preset_change_use_matching_source_output(self):
+        wav = self.audio('song.wav')
+        mp3 = self.audio('song.mp3')
+        self.w.add_paths([str(wav), str(mp3)])
+        wav_index = self.w.batch_paths.index(wav.resolve())
+        mp3_index = self.w.batch_paths.index(mp3.resolve())
+        wav_dir = self.w.stem_output_dir(wav_index)
+        wav_dir.mkdir(parents=True)
+        (wav_dir / 'original.wav').write_bytes(b'preserve')
+        self.assertEqual(self.w.inspect_existing_output(wav_index), 'SOURCE CONFLICT')
+        self.assertEqual(self.w.inspect_existing_output(mp3_index), 'READY')
+        mp3_combo = self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(mp3_index), 1)
+        mp3_combo.setCurrentIndex(mp3_combo.findData('vocals'))
+        self.assertEqual(self.w.inspect_existing_output(mp3_index), 'READY')
+        self.assertNotEqual(self.w.stem_output_dir(wav_index), self.w.stem_output_dir(mp3_index))
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual((wav_dir / 'original.wav').read_bytes(), b'preserve')
+        self.assertFalse((wav_dir / 'called').exists())
+        self.assertEqual((self.w.stem_output_dir(mp3_index) / 'called').read_text(), 'vocals')
+        self.assertEqual([call[1] for call in self.backend_calls()], [str(mp3)])
+        self.w.clear_batch()
+        self.w.add_paths([str(mp3), str(wav), str(mp3)])
+        self.assertEqual(len(self.w.batch_paths), 2)
+        self.assertEqual(self.w.inspect_existing_output(0), 'READY')
+        self.assertEqual(self.w.inspect_existing_output(1), 'SOURCE CONFLICT')
+        self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1).setCurrentIndex(
+            self.w.queue_list.itemWidget(self.w.queue_list.topLevelItem(0), 1).findData('vocals'))
+        self.assertEqual(self.w.inspect_existing_output(0), 'PARTIAL / UNKNOWN')
+
     def test_folder_duplicate_and_skip(self):
         a=self.audio('a.WAV'); self.audio('ignore.txt')
         (self.root/'nested').mkdir(); (self.root/'nested/x.wav').touch()
         (self.root/'alias.wav').symlink_to(a)
         self.w.add_paths([str(self.root),str(a)])
         self.assertEqual(self.w.batch_paths,[a.resolve()])
-        target=self.root/'a_stemlab/balanced';target.parent.mkdir();target.write_text('preserve')
+        target=self.w.stem_output_dir(0);target.parent.mkdir(parents=True);target.write_text('preserve')
         self.w.start_batch();self.wait_done()
         self.assertEqual(target.read_text(),'preserve')
         self.assertEqual(self.w.queue_list.topLevelItem(0).text(2),'Blocked')
