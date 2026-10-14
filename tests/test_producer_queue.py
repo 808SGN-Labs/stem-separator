@@ -165,6 +165,8 @@ class QueueTests(unittest.TestCase):
             self.assertEqual(self.w.theme_name, 'Analog Orange')
             self.assertEqual(self.w.settings.value('appearance/theme'), 'Analog Orange')
             self.assertIn(m.THEMES['Analog Orange'][3], app.styleSheet())
+            self.assertIn('QDialog#appearanceDialog', app.styleSheet())
+            self.assertIn('QDialog#appearanceDialog QComboBox', app.styleSheet())
             after = self.w.queue_list.topLevelItem(0).foreground(2).color().name()
             self.assertNotEqual(before, after)
             self.w.apply_theme('Not A Theme')

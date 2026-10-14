@@ -96,7 +96,17 @@ def theme_stylesheet(name):
         '#202c36': panel, '#283642': panel, '#364958': selected,
         '#1c2a33': panel, '#253540': selected, '#0c1218': surface,
     }
-    return re.sub(r'#[0-9a-fA-F]{6}', lambda m: roles.get(m.group(0).lower(), m.group(0)), STYLE)
+    sheet = re.sub(r'#[0-9a-fA-F]{6}', lambda m: roles.get(m.group(0).lower(), m.group(0)), STYLE)
+    return sheet + f"""
+QDialog#appearanceDialog {{ background: {background}; color: #e6ecf0; }}
+QDialog#appearanceDialog QLabel {{ color: #e6ecf0; }}
+QDialog#appearanceDialog QLabel#appearanceHint {{ color: #91a5b4; font-size: 11px; }}
+QDialog#appearanceDialog QPushButton {{ background: {panel}; color: #e6ecf0; border: 1px solid {selected}; padding: 7px 10px; }}
+QDialog#appearanceDialog QPushButton:hover {{ background: {selected}; }}
+QDialog#appearanceDialog QComboBox {{ background: {surface}; border: 1px solid {selected}; }}
+QDialog#appearanceDialog QComboBox:focus {{ border-color: {accent}; }}
+QDialog#appearanceDialog QComboBox QAbstractItemView {{ background: {panel}; selection-background-color: {selected}; }}
+"""
 
 
 class DropEdit(QLineEdit):
@@ -390,14 +400,30 @@ class Producer(QMainWindow):
     def open_appearance(self):
         dialog = QDialog(self)
         dialog.setWindowTitle('StemLab · Appearance')
-        dialog.setMinimumWidth(320)
+        dialog.setObjectName('appearanceDialog')
+        dialog.setMinimumWidth(360)
         layout = QFormLayout(dialog)
+        layout.setContentsMargins(18, 18, 18, 14)
+        layout.setSpacing(12)
         combo = QComboBox(dialog)
         combo.addItems(THEMES)
         combo.setCurrentText(self.theme_name)
-        layout.addRow('Color theme', combo)
-        note = QLabel('Changes apply immediately and are saved locally.', dialog)
-        note.setWordWrap(True)
+        previous = QPushButton('◀', dialog)
+        following = QPushButton('▶', dialog)
+        previous.setToolTip('Previous theme')
+        following.setToolTip('Next theme')
+        selector = QWidget(dialog)
+        selector_row = QHBoxLayout(selector)
+        selector_row.setContentsMargins(0, 0, 0, 0)
+        selector_row.setSpacing(5)
+        selector_row.addWidget(previous)
+        selector_row.addWidget(combo, 1)
+        selector_row.addWidget(following)
+        previous.clicked.connect(lambda: combo.setCurrentIndex((combo.currentIndex() - 1) % combo.count()))
+        following.clicked.connect(lambda: combo.setCurrentIndex((combo.currentIndex() + 1) % combo.count()))
+        layout.addRow('Color theme', selector)
+        note = QLabel('Applies instantly · Saved locally', dialog)
+        note.setObjectName('appearanceHint')
         layout.addRow(note)
         actions = QDialogButtonBox(QDialogButtonBox.Close, parent=dialog)
         actions.rejected.connect(dialog.reject)

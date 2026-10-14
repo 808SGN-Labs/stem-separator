@@ -200,6 +200,12 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Appearance dialog polish v3 (pending local regression)
+
+- Appearance dialog now uses theme-specific background, controls, and borders rather than default gray Qt styling.
+- Previous/next arrow buttons cycle through all eight themes, wrapping around; the dropdown remains available for direct selection.
+- Shortened hint text and compact spacing. Themes still apply immediately and persist through QSettings; no audio-backend changes.
+
 ## Appearance themes v2 (pending local regression and desktop review)
 
 - Added eight named dark themes: Saigon Mint (default), Studio Graphite, Analog Orange, Midnight Blue, Berry & Mint, Vintage Gold, Lavender and Avocado.
