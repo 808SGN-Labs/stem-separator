@@ -152,6 +152,27 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(app.clipboard().text(), 'Process completed\nOutput verified')
         self.assertEqual(self.w.copy_log_button.text(), 'Copied')
 
+    def test_appearance_themes_live_and_persist(self):
+        self.assertEqual(len(m.THEMES), 8)
+        source = self.audio('theme.wav')
+        self.w.add_paths([str(source)])
+        previous = self.w.settings.value('appearance/theme', 'Saigon Mint')
+        try:
+            self.w.apply_theme('Saigon Mint')
+            self.w.set_batch_label(0, 'PROCESSING')
+            before = self.w.queue_list.topLevelItem(0).foreground(2).color().name()
+            self.w.apply_theme('Analog Orange')
+            self.assertEqual(self.w.theme_name, 'Analog Orange')
+            self.assertEqual(self.w.settings.value('appearance/theme'), 'Analog Orange')
+            self.assertIn(m.THEMES['Analog Orange'][3], app.styleSheet())
+            after = self.w.queue_list.topLevelItem(0).foreground(2).color().name()
+            self.assertNotEqual(before, after)
+            self.w.apply_theme('Not A Theme')
+            self.assertEqual(self.w.theme_name, 'Analog Orange')
+        finally:
+            self.w.apply_theme(previous if previous in m.THEMES else 'Saigon Mint')
+            self.w.settings.setValue('appearance/theme', previous)
+
     def test_queue_polish_status_colors_and_controls(self):
         source = self.audio('polish.wav')
         self.w.add_paths([str(source)])

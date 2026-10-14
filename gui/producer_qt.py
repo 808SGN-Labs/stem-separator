@@ -7,11 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QProcess, Qt, QUrl, Signal, QTimer, QMimeData
+from PySide6.QtCore import QEvent, QProcess, Qt, QUrl, Signal, QTimer, QMimeData, QSettings
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QDrag
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QListWidget, QSizePolicy, QScrollArea,
     QPushButton, QVBoxLayout, QWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QHeaderView, QMenu,
 )
@@ -71,6 +71,32 @@ QPushButton#quiet:hover { background: #253540; color: #e6ecf0; }
 QLabel#queueHint { color: #879aa8; font-size: 12px; }
 QLabel#footer { color: #718593; font-size: 11px; }
 """
+
+# Neutral base CSS is rendered through named theme palettes; processing logic is unaffected.
+THEMES = {
+    'Saigon Mint': ('#12171d', '#1a222b', '#0d1319', '#73d6c6', '#29464a'),
+    'Studio Graphite': ('#161a1e', '#252b31', '#10151a', '#b5c0c9', '#3b4953'),
+    'Analog Orange': ('#1b1918', '#2c2724', '#13100f', '#e6a15a', '#57402e'),
+    'Midnight Blue': ('#101722', '#202b3d', '#0b111c', '#82acf1', '#263f64'),
+    'Berry & Mint': ('#1b1722', '#302637', '#110e17', '#c38dcc', '#49334f'),
+    'Vintage Gold': ('#201d18', '#312b22', '#15120e', '#d9b778', '#564731'),
+    'Lavender': ('#191724', '#292538', '#100f1b', '#ae9bf0', '#433a60'),
+    'Avocado': ('#1b211a', '#2a3428', '#11170f', '#a6c179', '#40523a'),
+}
+
+
+def theme_stylesheet(name):
+    """Substitute all base palette roles at once, avoiding cascading replacements."""
+    background, panel, surface, accent, selected = THEMES.get(name, THEMES['Saigon Mint'])
+    roles = {
+        '#12171d': background, '#1a222b': panel, '#0d1319': surface,
+        '#10171d': surface, '#73d6c6': accent, '#75cfc5': accent,
+        '#29464a': selected, '#4c9b96': accent, '#95e4d6': accent,
+        '#21323c': panel, '#172129': panel, '#1b2730': panel,
+        '#202c36': panel, '#283642': panel, '#364958': selected,
+        '#1c2a33': panel, '#253540': selected, '#0c1218': surface,
+    }
+    return re.sub(r'#[0-9a-fA-F]{6}', lambda m: roles.get(m.group(0).lower(), m.group(0)), STYLE)
 
 
 class DropEdit(QLineEdit):
@@ -188,6 +214,9 @@ class Producer(QMainWindow):
         self.batch_active = False
         self.batch_preset = None
         self.batch_custom_output = None
+        self.settings = QSettings('808SGN', 'StemLab')
+        saved_theme = self.settings.value('appearance/theme', 'Saigon Mint')
+        self.theme_name = saved_theme if saved_theme in THEMES else 'Saigon Mint'
         self.preview_audio = QAudioOutput(self)
         self.preview_audio.setVolume(0.7)
         self.preview_player = QMediaPlayer(self)
@@ -217,6 +246,10 @@ class Producer(QMainWindow):
         brand.setObjectName("brand")
         header.addWidget(brand)
         header.addStretch()
+        self.appearance_button = QPushButton('Appearance')
+        self.appearance_button.setObjectName('quiet')
+        self.appearance_button.clicked.connect(self.open_appearance)
+        header.addWidget(self.appearance_button)
         tag = QLabel("LOCAL  ·  CPU  ·  OFFLINE PROCESSING")
         tag.setObjectName("muted")
         header.addWidget(tag)
@@ -340,6 +373,37 @@ class Producer(QMainWindow):
         footer = QLabel("StemLab research preview  ·  Pilot model rankings are source-dependent")
         footer.setObjectName("footer")
         root.addWidget(footer)
+
+    def apply_theme(self, name):
+        if name not in THEMES:
+            return
+        self.theme_name = name
+        QApplication.instance().setStyleSheet(theme_stylesheet(name))
+        self.settings.setValue('appearance/theme', name)
+        # Queue item status brushes are not stylesheet-managed.
+        for index in range(self.queue_list.topLevelItemCount()):
+            item = self.queue_list.topLevelItem(index)
+            state = item.data(2, Qt.UserRole)
+            if state:
+                self.set_batch_label(index, state)
+
+    def open_appearance(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('StemLab · Appearance')
+        dialog.setMinimumWidth(320)
+        layout = QFormLayout(dialog)
+        combo = QComboBox(dialog)
+        combo.addItems(THEMES)
+        combo.setCurrentText(self.theme_name)
+        layout.addRow('Color theme', combo)
+        note = QLabel('Changes apply immediately and are saved locally.', dialog)
+        note.setWordWrap(True)
+        layout.addRow(note)
+        actions = QDialogButtonBox(QDialogButtonBox.Close, parent=dialog)
+        actions.rejected.connect(dialog.reject)
+        layout.addRow(actions)
+        combo.currentTextChanged.connect(self.apply_theme)
+        dialog.exec()
 
     def eventFilter(self, obj, event):
         if event.type() in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
@@ -556,6 +620,7 @@ class Producer(QMainWindow):
         label = 'Unverified' if state.upper() == 'COMPLETE — UNVERIFIED' else state.title()
         item.setText(2, label)
         item.setToolTip(2, label)
+        item.setData(2, Qt.UserRole, state)
         key = state.upper()
         if key in ('VERIFIED', 'VERIFIED EXISTING', 'EXISTING STEMS'):
             color = '#83d2b5'
@@ -567,6 +632,10 @@ class Producer(QMainWindow):
             color = '#e2bd83'
         else:
             color = '#9dafbc'
+        if key in ('VERIFIED', 'VERIFIED EXISTING'):
+            color = THEMES[self.theme_name][3]
+        elif key == 'PROCESSING':
+            color = QColor(THEMES[self.theme_name][3]).darker(120).name()
         item.setForeground(2, QBrush(QColor(color)))
         self.refresh_stem_children(index)
 
@@ -968,6 +1037,7 @@ def main():
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
     window = Producer()
+    window.apply_theme(window.theme_name)
     window.show()
     return app.exec()
 

@@ -200,6 +200,13 @@ The standalone Source Audio and global Mode controls were visible at this earlie
 
 **Decision:** GO for end-to-end producer workflow acceptance; PARK model/view refactor, multi-drag, waveform/FFT, ETA and extra design work. No commit or release claim until acceptance and explicit approval.
 
+## Appearance themes v2 (pending local regression and desktop review)
+
+- Added eight named dark themes: Saigon Mint (default), Studio Graphite, Analog Orange, Midnight Blue, Berry & Mint, Vintage Gold, Lavender and Avocado.
+- Header **Appearance** opens a compact selector. Switching themes updates Qt styling immediately, and `QSettings('808SGN', 'StemLab')` persists the choice locally.
+- Theme substitutions are centralized; no separation or backend changes. Status label text remains intact and dynamic processing/verified colors update on theme changes.
+- UI scaling remains out of scope for this iteration. A synthetic test covers theme switching, persistence, invalid names and status recoloring. Desktop and local regression checks remain pending.
+
 ## Producer GUI Polish v1 (pending local regression)
 
 - Refined queue row height, header contrast, padding, indentation, hover and selected states; adjusted mode/status column proportions.
