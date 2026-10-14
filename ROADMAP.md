@@ -104,7 +104,7 @@ Producer queue UX / HMI target and implementation gates: [docs/PRODUCER-QUEUE-UX
 - [ ] Verify fresh Linux installation (clean-machine acceptance)
 - [x] Verify real Balanced CPU inference with network namespace disabled
 - [x] Validate four real Balanced offline output WAV metadata (44.1 kHz, stereo, 10.00 s, PCM 16-bit)
-- [ ] Verify cached-model inference with read-only cache
+- [x] Verify cached-model inference with read-only cache (Balanced, Linux mount + network namespaces)
 - [ ] Produce a distributable, reproducible Linux package
 - [ ] Offline-aware model manager (future capability)
 
@@ -120,8 +120,11 @@ finished in 12 seconds and emitted four WAV files (Bass, Drums, Other, Vocals)
 using the existing ~1.9 GB cache. This confirms one real network-disconnected
 inference path, not full GUI/preset offline acceptance. The cache was writable. A subsequent network-isolated Balanced run produced
 four WAVs independently checked with ffprobe: PCM 16-bit, 44.1 kHz, stereo,
-10.00 seconds each. Read-only cache acceptance remains open. Synthetic tests do
-not replace release acceptance. See `docs/PRODUCER-QUEUE-UX.md`.
+10.00 seconds each. A third Balanced separation completed on 2026-10-14
+inside isolated mount and network namespaces with a bind-mounted read-only
+model cache; four stems were produced and the local command reported PASS.
+The read-only check applies to the namespace, not persistent host mounts.
+Synthetic tests do not replace release acceptance. See `docs/PRODUCER-QUEUE-UX.md`.
 
 ## January 2027 — Producer UX Follow-up
 
