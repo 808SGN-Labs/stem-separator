@@ -1,17 +1,59 @@
-# 808SGN Stem Lab
+# StemLab by 808SGN Labs
 
 [![Historical benchmark](https://img.shields.io/badge/benchmark-v0.1.0-7c3aed)](RELEASE_NOTES.md)
-[![Linux](https://img.shields.io/badge/platform-Linux-fcc624)](#installation)
+[![Linux](https://img.shields.io/badge/platform-Linux-fcc624)](#installation-private-linux-alpha)
 [![Code license](https://img.shields.io/badge/code-MIT-green)](LICENSE-CODE)
 [![Docs license](https://img.shields.io/badge/docs-CC%20BY%204.0-blue)](LICENSE-DOCS)
 
-**Private, local AI stem separation for Linux producers.**
+**Separate music into WAV stems on your own Linux machine, then bring verified
+results into your production session.** StemLab is a local-first Producer GUI
+with a queue, CPU-first presets, preview and individual file drag-out. Source
+audio stays on your machine; Python package installation and first use of an
+uncached model can require network access. StemLab does not upload your audio
+to a cloud separation service.
+
+## Producer workflow
+
+- Import audio files or a folder's top-level audio files, queue tracks and
+  choose a preset per job. Balanced is the default; Fast is the other supported
+  four-stem option in this private Linux alpha.
+- Run jobs sequentially, inspect process logs, cancel processing and view
+  generated WAV stems. Supported four-stem outputs are checked for expected
+  files and basic audio metadata before they appear as verified.
+- Re-import existing results and skip occupied output destinations. Partial or
+  unrecognized outputs are not overwritten automatically.
+- Preview stems with Qt Multimedia and drag individual verified stem files into
+  a file manager or DAW. On Linux Mint, the user confirmed audible preview and
+  individual stem drag into Bitwig. See the
+  [acceptance record](docs/PRODUCER-ALPHA-ACCEPTANCE.md) for the exact real
+  desktop evidence and automated-test limits.
+
+## Private Linux Producer alpha
+
+`v0.2.0-alpha.1` is distributed privately as a source ZIP. It is **not** a
+public GitHub release. See [Installation](#installation-private-linux-alpha)
+and the [candidate notes](docs/RELEASE-NOTES-v0.2.0-alpha.1.md) for the
+prerequisites, install command and limitations. Model weights are not bundled;
+CPU time varies by machine and track. Other presets remain experimental for
+this candidate. Third-party projects retain their own terms; see
+[THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Screenshot
+
+TODO: add a genuine, privacy-reviewed Producer GUI screenshot. No suitable
+screenshot is currently tracked in this repository.
+
+## Historical v0.1.0 benchmark and research
+
+The [public v0.1.0 release](RELEASE_NOTES.md) documented the Linux CPU
+benchmark and did not include a GUI. Its measurements and model comparisons
+below are source-dependent, not universal quality rankings.
 
 Reproducible CPU benchmarks and task-focused wrappers for local music stem
 separation. Built by **MTM DSP** and published by **808SGN Labs** for producers
 who want private, offline processing rather than another upload service.
 
-## Quick start
+### Benchmark CLI quick start
 
 ```bash
 git clone https://github.com/808SGN-Labs/stemlab.git
@@ -39,7 +81,7 @@ affiliated with the upstream projects.
 **Software:** `audio-separator` 0.47.0, Python 3.12, FFmpeg 4.4.2  
 **Test source:** 130.29-second stereo, 48 kHz, 24-bit Suno-generated WAV
 
-## Short version
+### Benchmark snapshot
 
 Local stem separation on Linux is already practical for remixing and production
 without dedicated ML acceleration.
@@ -482,7 +524,7 @@ development with an existing PySide6 environment:
 .venv-gui/bin/python gui/producer_qt.py
 ```
 
-The Qt producer preview uses a queue-first interface with a preset per job (Balanced by default), drag-in and button-based file/folder import (top-level audio files only), resolved-path deduplication, per-track/preset export paths, process logs, Copy details, and cancellation. Batch processing skips existing nonempty output paths. Expanded track rows show actual nonempty WAV files from the expected output folder. Four-stem presets validate expected outputs, codec, channels and duration; the Drum Parts preset additionally checks its six expected stems and source-matched channels/duration. Other specialist presets still require manual inspection. The current development tree also contains experimental Qt Multimedia double-click preview, safe file-path context actions, and Qt file-URL drag-out, pending real Linux Mint/Bitwig verification. It uses the existing `scripts/stem-separate` backend and shared model cache.
+The Qt producer preview uses a queue-first interface with a preset per job (Balanced by default), drag-in and button-based file/folder import (top-level audio files only), resolved-path deduplication, per-track/preset export paths, process logs, Copy details, and cancellation. Batch processing skips existing nonempty output paths. Expanded track rows show actual nonempty WAV files from the expected output folder. Four-stem presets validate expected outputs, codec, channels and duration; the Drum Parts preset additionally checks its six expected stems and source-matched channels/duration. Other specialist presets still require manual inspection. Qt Multimedia preview, safe file-path context actions, and Qt file-URL drag-out are present; native Linux Mint preview and individual Bitwig stem drag were confirmed by the user as recorded above. It uses the existing `scripts/stem-separate` backend and shared model cache.
 
 Offscreen Qt regression tests, using a replacement backend and synthetic WAVs, can be run with:
 
