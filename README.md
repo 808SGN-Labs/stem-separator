@@ -38,10 +38,9 @@ CPU time varies by machine and track. Other presets remain experimental for
 this candidate. Third-party projects retain their own terms; see
 [THIRD_PARTY.md](THIRD_PARTY.md).
 
-## Screenshot
+## StemLab Producer GUI
 
-TODO: add a genuine, privacy-reviewed Producer GUI screenshot. No suitable
-screenshot is currently tracked in this repository.
+![StemLab Producer GUI — Linux Alpha](docs/assets/stemlab-producer.png)
 
 ## Historical v0.1.0 benchmark and research
 
