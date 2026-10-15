@@ -14,8 +14,8 @@ who want private, offline processing rather than another upload service.
 ## Quick start
 
 ```bash
-git clone https://github.com/808sgn-labs/stem-separator.git
-cd stem-separator
+git clone https://github.com/808SGN-Labs/stemlab.git
+cd stemlab
 chmod +x scripts/install.sh scripts/stem-separate
 ./scripts/install.sh
 ./scripts/stem-separate 4stems /path/to/song.wav
