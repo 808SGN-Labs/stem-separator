@@ -103,7 +103,13 @@ The timings below are therefore conservative. A supported NVIDIA GPU should be s
 ## Installation (private Linux alpha)
 
 Prerequisites: Linux x86_64, Python 3.12 available to `uv`, `uv` on `PATH`,
-and FFmpeg including `ffprobe` on `PATH`. Install dependencies while connected;
+FFmpeg including `ffprobe` on `PATH`, matching Python 3.12 development headers,
+working C/C++ compilers and `make`, and `libxcb-cursor.so.0` for the Qt XCB GUI.
+On Linux Mint 22, the missing system packages in the mint1 acceptance run were
+`python3.12-dev`, `build-essential`, and `libxcb-cursor0`; install them with your
+system package manager before running StemLab. The installer checks these
+prerequisites and prints a diagnostic; it does not install system packages.
+Install Python dependencies while connected;
 the installer does not download models, install system packages, or invoke
 `sudo`. From a checkout:
 
@@ -130,8 +136,12 @@ Models are **not bundled**. The wrapper uses
 prepare an authorized cache before disconnected use. The offline tests use
 stubs and do not prove real model inference. Direct Python package versions
 are pinned in `scripts/install.sh`, but transitive dependencies and the Python
-patch version are not yet locked; a real clean-machine install and cached-model
-GUI acceptance remain alpha release checks.
+patch version are not yet locked. One real clean installation and installed-GUI
+startup were reported on Linux Mint 22; see
+[Producer Alpha acceptance](docs/PRODUCER-ALPHA-ACCEPTANCE.md) for the evidence
+and remaining native desktop checks. The CPU-only dependency request also
+resolved CUDA-related transitive packages on mint1; the installer does not
+currently optimize that dependency closure.
 
 ### Offline installer preflight
 
@@ -143,8 +153,9 @@ temporary stubs and redirect `XDG_DATA_HOME` to a temporary directory:
 python3 -m unittest discover -s tests -p 'test_install_preflight.py' -v
 ```
 
-These tests verify installation paths, pinned direct dependencies, the copied
-GUI, a relocatable desktop entry, and missing-FFmpeg handling. They do **not**
+These tests verify installation paths, pinned direct dependencies, native-build
+and Qt XCB prerequisite diagnostics, the copied GUI, a relocatable desktop
+entry, and missing-FFmpeg handling. They do **not**
 prove fresh-system compatibility, successful real dependency installation,
 Qt audio playback, or offline inference.
 

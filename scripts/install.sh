@@ -49,12 +49,35 @@ for target in "$APP_CODE/gui" "$APP_CODE/scripts" \
   fi
 done
 
+CC_BIN=${CC:-cc}
+CXX_BIN=${CXX:-c++}
+MAKE_BIN=${MAKE:-make}
+for tool in "$CC_BIN" "$CXX_BIN" "$MAKE_BIN"; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Native build tool missing: $tool. Install build-essential (or equivalent C/C++ compilers and make) before installing StemLab." >&2
+    exit 1
+  fi
+done
+if ! printf 'int stemlab_preflight(void) { return 0; }\n' | "$CC_BIN" -x c -fsyntax-only - >/dev/null 2>&1 ||
+   ! printf 'int stemlab_preflight() { return 0; }\n' | "$CXX_BIN" -x c++ -fsyntax-only - >/dev/null 2>&1; then
+  echo "C/C++ compiler check failed. Install build-essential (or equivalent working compilers) before installing StemLab." >&2
+  exit 1
+fi
+
 mkdir -p "$APP_DIR"
 # Never inherit uv's environment switch that can clear a target venv.
 unset UV_VENV_CLEAR UV_VENV_FORCE
 if [[ ! -e "$VENV" ]]; then
   uv venv --no-python-downloads --python 3.12 "$VENV"
   printf '%s\n' '808sgn-stem-lab-venv-v1' > "$VENV_MARKER"
+fi
+if ! "$VENV/bin/python" -B -c 'from pathlib import Path; import sysconfig; raise SystemExit(not (Path(sysconfig.get_path("include")) / "Python.h").is_file())'; then
+  echo "Python.h is missing for the selected Python 3.12. Install python3.12-dev (or matching Python development headers) before installing StemLab; diffq needs them for its native build." >&2
+  exit 1
+fi
+if ! "$VENV/bin/python" -B -c 'import ctypes; ctypes.CDLL("libxcb-cursor.so.0")'; then
+  echo "Qt XCB prerequisite libxcb-cursor.so.0 could not be loaded. Install libxcb-cursor0 (or equivalent) before launching the Linux GUI." >&2
+  exit 1
 fi
 uv pip install --python "$VENV/bin/python" "audio-separator[cpu]==0.47.0" "audioread==3.0.1" "PySide6==6.11.2"
 

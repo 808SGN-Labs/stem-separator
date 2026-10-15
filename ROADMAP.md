@@ -101,7 +101,7 @@ Producer queue UX / HMI target and implementation gates: [docs/PRODUCER-QUEUE-UX
 - [x] Eight persistent appearance themes
 - [x] Source-checkout GUI launcher and Linux Mint desktop menu integration
 - [ ] Revalidate six real Drum Parts WAVs end-to-end
-- [ ] Verify fresh Linux installation (clean-machine acceptance)
+- [x] Verify fresh Linux installation on mint1 (user-reported external acceptance; prerequisites documented)
 - [x] Verify real Balanced CPU inference with network namespace disabled
 - [x] Validate four real Balanced offline output WAV metadata (44.1 kHz, stereo, 10.00 s, PCM 16-bit)
 - [x] Verify cached-model inference with read-only cache (Balanced, Linux mount + network namespaces)
@@ -112,9 +112,15 @@ Acceptance evidence as of 2026-10-14: 22 producer GUI regression tests were
 reported passing on Linux Mint, plus two desktop-installer tests. A real
 three-file CPU batch (Drum Parts, Fast, Balanced) generated 14 WAVs. Four-stem
 outputs and Bitwig drag/preview were checked in a live producer workflow.
-A new real six-part metadata validation run and fresh-machine installation
-remain open. On 2026-10-14, a 10-second synthetic stereo WAV was separated
-using `balanced` / `htdemucs.yaml`, audio-separator 0.47.0 and Python 3.12.14
+A new real six-part metadata validation run remains open. On 2026-10-15, the
+user reported a fresh Linux Mint 22 installation on mint1 with actual Python
+dependencies and installed-GUI startup after adding system development headers,
+build tools, and `libxcb-cursor0`. A real Balanced job produced four verified
+stems; remote NoMachine audio was unsuitable for preview acceptance. See
+[Producer Alpha acceptance](docs/PRODUCER-ALPHA-ACCEPTANCE.md) for the precise
+evidence and pending mint0 desktop checks. On 2026-10-14, a 10-second synthetic
+stereo WAV was separated using `balanced` / `htdemucs.yaml`, audio-separator
+0.47.0 and Python 3.12.14
 inside `sudo unshare --net`, running inference as the normal user. CPU inference
 finished in 12 seconds and emitted four WAV files (Bass, Drums, Other, Vocals)
 using the existing ~1.9 GB cache. This confirms one real network-disconnected

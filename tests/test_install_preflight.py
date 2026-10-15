@@ -22,10 +22,13 @@ class InstallPreflightTests(unittest.TestCase):
         self.log = base / "uv-args.txt"
         self.env = dict(os.environ, XDG_DATA_HOME=str(self.xdg),
                         PATH=f"{self.bin}:{os.environ.get('PATH', '')}",
-                        STEMLAB_TEST_UV_LOG=str(self.log))
+                        STEMLAB_TEST_UV_LOG=str(self.log), CC='cc', CXX='c++', MAKE='make')
         self.env.pop("STEMLAB_TEST_FAIL_PIP", None)
         self.stub("ffmpeg", "#!/bin/sh\nexit 0\n")
         self.stub("ffprobe", "#!/bin/sh\nexit 0\n")
+        self.stub("cc", '#!/bin/sh\n[ "${STEMLAB_TEST_FAIL_CC:-}" != 1 ]\n')
+        self.stub("c++", '#!/bin/sh\n[ "${STEMLAB_TEST_FAIL_CXX:-}" != 1 ]\n')
+        self.stub("make", '#!/bin/sh\nexit 0\n')
         self.stub("uv", '#!/bin/sh\n'
                         '[ -z "${UV_VENV_CLEAR:-}" ] && [ -z "${UV_VENV_FORCE:-}" ] || exit 91\n'
                         'printf "%s\\n" "$*" >> "$STEMLAB_TEST_UV_LOG"\n'
@@ -33,7 +36,14 @@ class InstallPreflightTests(unittest.TestCase):
                         '  for target do :; done\n'
                         '  mkdir -p "$target/bin"\n'
                         '  printf "home = fixture\\n" > "$target/pyvenv.cfg"\n'
-                        '  printf "#!/bin/sh\\nexit 0\\n" > "$target/bin/python"\n'
+                        '  cat > "$target/bin/python" <<\'PYTHON\'\n'
+                        '#!/bin/sh\n'
+                        'case "$*" in\n'
+                        '  *Python.h*) [ "${STEMLAB_TEST_MISSING_HEADER:-}" != 1 ] ;;\n'
+                        '  *libxcb-cursor.so.0*) [ "${STEMLAB_TEST_MISSING_XCB:-}" != 1 ] ;;\n'
+                        '  *) exit 0 ;;\n'
+                        'esac\n'
+                        'PYTHON\n'
                         '  chmod +x "$target/bin/python"\n'
                         'fi\n'
                         '[ "$1" = pip ] && [ "${STEMLAB_TEST_FAIL_PIP:-}" = 1 ] && exit 53\n'
@@ -211,6 +221,69 @@ class InstallPreflightTests(unittest.TestCase):
         self.assertEqual(sentinel.read_text(), "keep")
         self.assertEqual([line.split()[0] for line in self.log.read_text().splitlines()],
                          ["venv", "pip", "pip"])
+
+    def test_missing_native_build_tool_fails_before_creating_app(self):
+        env = dict(self.env, MAKE='stemlab-missing-make')
+        result = subprocess.run(["bash", str(INSTALLER)], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Native build tool missing', result.stderr)
+        self.assertIn('build-essential', result.stderr)
+        self.assertFalse(self.log.exists())
+        self.assertFalse(self.xdg.exists())
+
+    def test_nonworking_c_compiler_fails_before_creating_app(self):
+        env = dict(self.env, STEMLAB_TEST_FAIL_CC='1')
+        result = subprocess.run(["bash", str(INSTALLER)], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('C/C++ compiler check failed', result.stderr)
+        self.assertFalse(self.log.exists())
+        self.assertFalse(self.xdg.exists())
+
+    def test_nonworking_cpp_compiler_fails_before_creating_app(self):
+        env = dict(self.env, STEMLAB_TEST_FAIL_CXX='1')
+        result = subprocess.run(["bash", str(INSTALLER)], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('C/C++ compiler check failed', result.stderr)
+        self.assertFalse(self.log.exists())
+        self.assertFalse(self.xdg.exists())
+
+    def test_missing_python_headers_stops_before_dependency_install(self):
+        env = dict(self.env, STEMLAB_TEST_MISSING_HEADER='1')
+        result = subprocess.run(["bash", str(INSTALLER)], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Python.h is missing', result.stderr)
+        self.assertIn('python3.12-dev', result.stderr)
+        self.assertEqual([line.split()[0] for line in self.log.read_text().splitlines()], ['venv'])
+        self.assertFalse((self.xdg / '808sgn-stem-lab/app').exists())
+
+    def test_missing_qt_xcb_library_stops_before_dependency_install(self):
+        env = dict(self.env, STEMLAB_TEST_MISSING_XCB='1')
+        result = subprocess.run(["bash", str(INSTALLER)], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('libxcb-cursor.so.0', result.stderr)
+        self.assertIn('libxcb-cursor0', result.stderr)
+        self.assertEqual([line.split()[0] for line in self.log.read_text().splitlines()], ['venv'])
+        self.assertFalse((self.xdg / '808sgn-stem-lab/app').exists())
+
+    def test_failed_header_check_preserves_existing_owned_venv(self):
+        first = subprocess.run(["bash", str(INSTALLER)], env=self.env,
+                               capture_output=True, text=True, timeout=10)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        venv = self.xdg / '808sgn-stem-lab/.venv'
+        sentinel = venv / 'personal.txt'
+        sentinel.write_text('keep')
+        env = dict(self.env, STEMLAB_TEST_MISSING_HEADER='1')
+        second = subprocess.run(["bash", str(INSTALLER)], env=env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(second.returncode, 0)
+        self.assertEqual(sentinel.read_text(), 'keep')
+        self.assertEqual([line.split()[0] for line in self.log.read_text().splitlines()],
+                         ['venv', 'pip'])
 
     def test_missing_ffmpeg_is_reported_without_install(self):
         # Restrict PATH to stubs while still exposing bash itself via absolute path.
