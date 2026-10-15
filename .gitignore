@@ -20,3 +20,6 @@ data/listening/**/*.wav
 data/listening/**/mapping.secret.json
 data/listening/**/scores.json
 /scores.json
+
+# Local Codex handoff, available in the workspace but excluded from release staging
+/docs/CODEX-HANDOFF.md
