@@ -7,7 +7,7 @@ import threading
 import time
 import unittest
 import wave
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import MagicMock, patch
 from shiboken6 import isValid
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
@@ -15,6 +15,74 @@ spec = importlib.util.spec_from_file_location('producer', Path(__file__).resolve
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 app = m.QApplication.instance() or m.QApplication([])
+
+
+class BackendCommandTests(unittest.TestCase):
+    def test_linux_keeps_wrapper_and_positional_arguments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            wrapper = root / 'scripts' / 'stem-separate'
+            wrapper.parent.mkdir()
+            wrapper.write_text('#!/bin/sh\nexit 0\n')
+            wrapper.chmod(0o755)
+            source = root / 'audio with spaces.wav'
+            output = root / 'stems 夜'
+            self.assertEqual(
+                m.build_backend_command('balanced', source, output, platform='linux', app_root=root),
+                (str(wrapper), ['balanced', str(source), str(output)]),
+            )
+            wrapper.chmod(0o644)
+            with self.assertRaisesRegex(FileNotFoundError, 'scripts/stem-separate'):
+                m.build_backend_command('balanced', source, output, platform='linux', app_root=root)
+
+    def test_windows_uses_app_owned_executable_and_argument_list(self):
+        root = PureWindowsPath(r'C:\Program Files\StemLab\app')
+        source = PureWindowsPath(r'D:\Audio Projects\夜の曲.wav')
+        output = PureWindowsPath(r'D:\Stems\Night Mix')
+        expected_program = str(root.parent / '.venv' / 'Scripts' / 'audio-separator.exe')
+        seen = []
+        program, arguments = m.build_backend_command(
+            'balanced', source, output, platform='win32', app_root=root,
+            environ={'LOCALAPPDATA': r'C:\Users\Tester\AppData\Local'},
+            executable_exists=lambda path: seen.append(path) or True,
+        )
+        self.assertEqual(seen, [expected_program])
+        self.assertEqual(program, expected_program)
+        self.assertEqual(arguments, [str(source), '--model_filename', 'htdemucs.yaml',
+                                     '--model_file_dir', r'C:\Users\Tester\AppData\Local\808sgn-stem-lab\models',
+                                     '--output_dir', str(output), '--output_format', 'WAV'])
+        self.assertTrue(all(isinstance(arg, str) for arg in arguments))
+
+    def test_windows_models_match_every_wrapper_preset_and_honor_overrides(self):
+        expected = {'4stems': 'hdemucs_mmi.yaml', 'balanced': 'htdemucs.yaml',
+                    'maximum': 'htdemucs_ft.yaml', 'vocals': 'vocals_mel_band_roformer.ckpt',
+                    '6stems': 'htdemucs_6s.yaml',
+                    'drum-parts': 'MDX23C-DrumSep-aufr33-jarredou.ckpt',
+                    'deverb': 'deverb_bs_roformer_8_384dim_10depth.ckpt'}
+        env = {'STEM_LAB_VENV': r'E:\Private App\venv',
+               'STEM_LAB_MODELS': r'F:\Model Cache\音'}
+        for preset, model in expected.items():
+            with self.subTest(preset=preset):
+                program, args = m.build_backend_command(
+                    preset, r'C:\Input\source.wav', r'C:\Output Dir', platform='win32',
+                    app_root=PureWindowsPath(r'C:\StemLab\app'), environ=env,
+                    executable_exists=lambda _: True,
+                )
+                self.assertEqual(program, r'E:\Private App\venv\Scripts\audio-separator.exe')
+                self.assertEqual(args[1:5], ['--model_filename', model,
+                                              '--model_file_dir', env['STEM_LAB_MODELS']])
+                self.assertEqual(args[-4:], ['--output_dir', r'C:\Output Dir', '--output_format', 'WAV'])
+
+    def test_windows_missing_executable_has_actionable_diagnostic(self):
+        root = PureWindowsPath(r'C:\StemLab\app')
+        with self.assertRaisesRegex(FileNotFoundError, 'Install the CPU dependencies'):
+            m.build_backend_command('balanced', r'C:\Input.wav', r'C:\Output', platform='win32',
+                                    app_root=root, environ={'LOCALAPPDATA': r'C:\Local'},
+                                    executable_exists=lambda _: False)
+        with self.assertRaisesRegex(ValueError, 'LOCALAPPDATA'):
+            m.build_backend_command('balanced', r'C:\Input.wav', r'C:\Output', platform='win32',
+                                    app_root=root, environ={}, executable_exists=lambda _: True)
+
 
 class QueueTests(unittest.TestCase):
     def setUp(self):

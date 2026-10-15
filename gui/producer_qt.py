@@ -9,7 +9,7 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from PySide6.QtCore import QEvent, QObject, QPointF, QProcess, QRunnable, QRect, QSize, QThreadPool, Qt, QUrl, Signal, QTimer, QMimeData, QSettings
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QDrag, QFont, QPainter, QPen
@@ -22,6 +22,50 @@ from PySide6.QtWidgets import (
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "stem-separate"
+WINDOWS_MODELS = {
+    "4stems": "hdemucs_mmi.yaml",
+    "balanced": "htdemucs.yaml",
+    "maximum": "htdemucs_ft.yaml",
+    "vocals": "vocals_mel_band_roformer.ckpt",
+    "6stems": "htdemucs_6s.yaml",
+    "drum-parts": "MDX23C-DrumSep-aufr33-jarredou.ckpt",
+    "deverb": "deverb_bs_roformer_8_384dim_10depth.ckpt",
+}
+
+
+def build_backend_command(preset, source, output, *, platform=None, app_root=None,
+                          environ=None, executable_exists=None):
+    """Return a QProcess program and argument list without shell quoting."""
+    platform = sys.platform if platform is None else platform
+    if platform != "win32":
+        wrapper = WRAPPER if app_root is None else Path(app_root) / "scripts" / "stem-separate"
+        if not wrapper.is_file() or not os.access(wrapper, os.X_OK):
+            raise FileNotFoundError("Executable scripts/stem-separate was not found.")
+        return str(wrapper), [preset, str(source), str(output)]
+
+    root = PureWindowsPath(ROOT if app_root is None else app_root)
+    env = os.environ if environ is None else environ
+    venv = PureWindowsPath(env.get("STEM_LAB_VENV") or str(root.parent / ".venv"))
+    program = str(venv / "Scripts" / "audio-separator.exe")
+    exists = executable_exists or (lambda path: Path(path).is_file())
+    if not exists(program):
+        raise FileNotFoundError(
+            f"Windows audio-separator executable not found: {program}. "
+            "Install the CPU dependencies in the app's .venv or set STEM_LAB_VENV."
+        )
+    if preset not in WINDOWS_MODELS:
+        raise ValueError(f"Unknown separation preset: {preset}")
+    models = env.get("STEM_LAB_MODELS")
+    if not models:
+        local_app_data = env.get("LOCALAPPDATA")
+        if not local_app_data:
+            raise ValueError("LOCALAPPDATA is required for the Windows model cache; set STEM_LAB_MODELS.")
+        models = str(PureWindowsPath(local_app_data) / "808sgn-stem-lab" / "models")
+    return program, [str(source), "--model_filename", WINDOWS_MODELS[preset],
+                     "--model_file_dir", models, "--output_dir", str(output),
+                     "--output_format", "WAV"]
+
+
 # tqdm reports per-model steps, not overall job completion.
 STEP_PROGRESS = re.compile(r"(\d{1,3})%\|[^\r\n]*?\|\s*(\d+)\s*/\s*(\d+)")
 FOUR_STEM_PRESETS = {"balanced", "4stems", "maximum"}
@@ -1128,14 +1172,16 @@ class Producer(QMainWindow):
         if not source.is_file():
             QMessageBox.warning(self, "Input missing", "Select an existing source audio file.")
             return
-        if not WRAPPER.is_file() or not os.access(WRAPPER, os.X_OK):
-            QMessageBox.critical(self, "Backend unavailable", "Executable scripts/stem-separate was not found.")
-            return
         output_text = self.output.text().strip()
         if not output_text:
             QMessageBox.warning(self, "Output missing", "Select an output directory.")
             return
         dest = Path(output_text).expanduser().resolve()
+        try:
+            program, arguments = build_backend_command(self.presets.currentData(), source, dest)
+        except (FileNotFoundError, ValueError) as error:
+            QMessageBox.critical(self, "Backend unavailable", str(error))
+            return
         owner = self.output_owner(source, self.presets.currentData())
         try:
             if dest == source.resolve() or dest == source.parent.resolve():
@@ -1167,8 +1213,8 @@ class Producer(QMainWindow):
             self.log.clear()
         self.append_log(f"Preset: {self.presets.currentData()}\nSource: {source}\nOutput: {dest}\n")
         self.process = QProcess(self)
-        self.process.setProgram(str(WRAPPER))
-        self.process.setArguments([self.presets.currentData(), str(source), str(dest)])
+        self.process.setProgram(program)
+        self.process.setArguments(arguments)
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.read_output)
         self.process.errorOccurred.connect(self.process_error)
