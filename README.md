@@ -1,6 +1,6 @@
 # 808SGN Stem Lab
 
-[![Release](https://img.shields.io/badge/release-v0.1.0-7c3aed)](RELEASE_NOTES.md)
+[![Historical benchmark](https://img.shields.io/badge/benchmark-v0.1.0-7c3aed)](RELEASE_NOTES.md)
 [![Linux](https://img.shields.io/badge/platform-Linux-fcc624)](#installation)
 [![Code license](https://img.shields.io/badge/code-MIT-green)](LICENSE-CODE)
 [![Docs license](https://img.shields.io/badge/docs-CC%20BY%204.0-blue)](LICENSE-DOCS)
@@ -101,6 +101,10 @@ Suno can export native stems, and commercial services such as Voice.ai can separ
 The timings below are therefore conservative. A supported NVIDIA GPU should be substantially faster.
 
 ## Installation (private Linux alpha)
+
+The [v0.2.0-alpha.1 private Producer candidate notes](docs/RELEASE-NOTES-v0.2.0-alpha.1.md)
+give the exact source-only ZIP recipe. Historical v0.1.0 benchmark release
+notes remain in [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 Prerequisites: Linux x86_64, Python 3.12 available to `uv`, `uv` on `PATH`,
 FFmpeg including `ffprobe` on `PATH`, matching Python 3.12 development headers,
@@ -486,7 +490,7 @@ Offscreen Qt regression tests, using a replacement backend and synthetic WAVs, c
 QT_QPA_PLATFORM=offscreen .venv-gui/bin/python tests/test_producer_queue.py -v
 ```
 
-These tests require PySide6, Qt Multimedia and `ffprobe`; they do not run separation models. On 13 October 2026, the user reported 11 passing local Qt tests and completed a real three-job CPU batch (Drum Parts, Fast, Balanced), with 14 visible WAV outputs and Verified statuses for the two four-stem jobs. Expandable stem rows were confirmed on the actual desktop. Direct single-stem drag-out from StemLab into Bitwig was subsequently confirmed by the user after a Qt mouse-drag fix. Preview and Source drag-out have since been confirmed working by the user on Linux Mint. Drum Parts synthetic validation and the refreshed local regression suite passed on Linux Mint (16/16 tests in 3.976 seconds). A fresh real Drum Parts validation run remains open. The preview is **not yet a validated release candidate**. Remaining gates include real Bitwig drag/drop, Qt audio playback, cancel/failure/skip scenarios, and output validation. See [Producer Queue UX](docs/PRODUCER-QUEUE-UX.md).
+These tests require PySide6, Qt Multimedia and `ffprobe`; they do not run separation models. The [Producer Alpha acceptance record](docs/PRODUCER-ALPHA-ACCEPTANCE.md) separates automated checks from user-reported real Mint 22 results. On mint1, the installed GUI produced four verified Balanced stems and skipped existing outputs. On mint0, the user confirmed a 249.16-second Balanced MP3 job with four verified stems, audible preview, individual stem drag into Bitwig, and repeated Cancel followed by Start. A fresh real Drum Parts validation and real backend failure-recovery check remain open; the GUI regression suite uses a replacement backend for those paths. See [Producer Queue UX](docs/PRODUCER-QUEUE-UX.md).
 
 The legacy Tkinter interface remains available at `python3 gui/stem_lab_gui.py` (requires `python3-tk` on some systems).
 

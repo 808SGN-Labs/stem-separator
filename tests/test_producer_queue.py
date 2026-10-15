@@ -1087,6 +1087,42 @@ for name in ("Bass", "Drums", "Other", "Vocals"):
                 self.w.queue_list.setCurrentItem(parent.child(0))
                 self.w.queue_list.startDrag(m.Qt.CopyAction)
             drag.assert_not_called()
+
+    def test_failed_partial_job_preserved_while_next_job_verifies_and_rerun_skips(self):
+        failed = self.wav(self.root / 'failed.wav')
+        following = self.wav(self.root / 'following.wav')
+        self.backend.write_text('''#!/usr/bin/env python3
+import sys, wave
+from pathlib import Path
+source, directory = Path(sys.argv[2]), Path(sys.argv[3])
+with Path(__file__).with_name("backend_calls").open("a") as log:
+    log.write("\\t".join(sys.argv[1:4]) + "\\n")
+if source.name == "failed.wav":
+    (directory / "failed_(Bass)_htdemucs.wav").write_bytes(b"partial fixture")
+    sys.exit(7)
+for name in ("Bass", "Drums", "Other", "Vocals"):
+    with wave.open(str(directory / f"{source.stem}_({name})_htdemucs.wav"), "wb") as out:
+        out.setnchannels(2); out.setsampwidth(2); out.setframerate(44100)
+        out.writeframes(b"\\0" * 44100 * 4)
+''')
+        self.w.add_paths([str(failed), str(following)])
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual([item.text(2) for item in
+                          (self.w.queue_list.topLevelItem(0), self.w.queue_list.topLevelItem(1))],
+                         ['Failed', 'Verified'])
+        partial = self.w.stem_output_dir(0) / 'failed_(Bass)_htdemucs.wav'
+        self.assertEqual(partial.read_bytes(), b'partial fixture')
+        self.assertEqual(len(self.backend_calls()), 2)
+
+        self.w.start_batch()
+        self.wait_done()
+        self.assertEqual(len(self.backend_calls()), 2)
+        self.assertEqual(partial.read_bytes(), b'partial fixture')
+        self.assertEqual(self.w.queue_list.topLevelItem(0).text(2), 'Partial / Unknown')
+        self.assertEqual(self.w.queue_list.topLevelItem(1).text(2), 'Verified Existing')
+        self.assertIn('existing output was not changed', self.w.log.toPlainText())
+
     def test_cancel_between_jobs_restores_queue_controls(self):
         self.w.add_paths([str(self.audio('a.wav')), str(self.audio('b.wav'))])
         self.w.start_batch()
