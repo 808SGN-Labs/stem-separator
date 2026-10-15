@@ -106,9 +106,9 @@ Parking lot: ETA guesses, CPU/RAM dashboards, waveform editing, custom playback 
 
 ### Verification performed
 
-- Read the live Git status and reviewed the current GUI, separation wrapper, queue UX specification, and roadmap through the stemlab workspace bridge.
-- Confirmed the workspace remains uncommitted: `ROADMAP.md` and `gui/producer_qt.py` modified; `docs/PRODUCER-QUEUE-UX.md` untracked.
-- No shell, Python execution, Qt runtime, audio fixtures, or GUI automation capability is exposed by the current bridge. Syntax checks, test-suite execution, two-mode separation, folder/drop behavior, cancellation, and export validation therefore remain **not run**. Earlier individual CLI runs do not verify this queue implementation.
+- Reviewed the available Git status and source files: GUI, separation wrapper, queue UX specification, and roadmap.
+- At the time of review, roadmap and GUI changes were uncommitted. This describes a historical snapshot, not the current repository state.
+- This was a source-only review. Syntax checks, runtime tests, separation, import, cancellation, and export validation were **not run** in that review. Earlier individual CLI runs did not verify this queue implementation.
 
 ### Next gate
 
@@ -117,9 +117,8 @@ Run a local syntax check and the app on Linux Mint, then process two queued file
 ## Work runtime review (2026-10-13)
 
 This follow-up supersedes the earlier “not run” statement for the checks listed below.
-MTM Bridge still exposes no shell or GUI execution on the Linux Mint host. Work
-can execute a copied source tree in its own environment; this is not a local
-model-separation or Bitwig compatibility test.
+This follow-up executed a copied source tree in an isolated environment;
+it was not a native model-separation or Bitwig compatibility test.
 
 ### Corrections
 

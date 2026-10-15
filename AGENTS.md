@@ -13,4 +13,4 @@ After every completed coding, testing, audit, or release task:
 7. Never commit or push automatically.
 8. Do not add tools, scripts, services, or dependencies solely for reporting.
 
-Keep the handoff in this repository's `docs/` directory so it is available through the existing MTM Bridge workspace. It is ignored by Git to keep it out of normal release staging.
+Keep the handoff in this repository's `docs/` directory for local review. It is ignored by Git and must not be included in commits or release artifacts.
