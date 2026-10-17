@@ -45,12 +45,14 @@ def build_backend_command(preset, source, output, *, platform=None, app_root=Non
 
     root = PureWindowsPath(ROOT if app_root is None else app_root)
     env = os.environ if environ is None else environ
-    venv = PureWindowsPath(env.get("STEM_LAB_VENV") or str(root.parent / ".venv"))
-    program = str(venv / "Scripts" / "audio-separator.exe")
     exists = executable_exists or (lambda path: Path(path).is_file())
-    if not exists(program):
+    candidates = ([PureWindowsPath(env["STEM_LAB_VENV"])] if env.get("STEM_LAB_VENV")
+                  else [root / ".venv", root.parent / ".venv"])
+    programs = [str(venv / "Scripts" / "audio-separator.exe") for venv in candidates]
+    program = next((path for path in programs if exists(path)), None)
+    if program is None:
         raise FileNotFoundError(
-            f"Windows audio-separator executable not found: {program}. "
+            f"Windows audio-separator executable not found: {programs[0]}. "
             "Install the CPU dependencies in the app's .venv or set STEM_LAB_VENV."
         )
     if preset not in WINDOWS_MODELS:
@@ -855,13 +857,16 @@ class Producer(QMainWindow):
             if (reference['channels'] < 1 or reference['rate'] < 1
                     or not math.isfinite(reference['duration']) or reference['duration'] <= 0):
                 return None
+            # Demucs promotes mono input to stereo before separation.
+            channels = (max(2, reference['channels']) if preset in FOUR_STEM_PRESETS
+                        else reference['channels'])
             for path in paths.values():
                 if (cancelled is not None and cancelled.is_set()) or (deadline and time.monotonic() >= deadline):
                     return None
                 info = (self.probe_audio(path, timeout=min(12, max(.01, deadline - time.monotonic())), cancelled=cancelled)
                         if deadline else self.probe_audio(path))
                 if (info['codec'] not in ('pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le')
-                        or info['channels'] != reference['channels']
+                        or info['channels'] != channels
                         or not math.isfinite(info['duration']) or info['duration'] <= 0
                         or abs(info['duration'] - reference['duration']) > 0.25
                         or info['rate'] != (FOUR_STEM_OUTPUT_RATE if preset in FOUR_STEM_PRESETS

@@ -44,9 +44,10 @@ class BackendCommandTests(unittest.TestCase):
         program, arguments = m.build_backend_command(
             'balanced', source, output, platform='win32', app_root=root,
             environ={'LOCALAPPDATA': r'C:\Users\Tester\AppData\Local'},
-            executable_exists=lambda path: seen.append(path) or True,
+            executable_exists=lambda path: seen.append(path) or path == expected_program,
         )
-        self.assertEqual(seen, [expected_program])
+        self.assertEqual(seen, [str(root / '.venv' / 'Scripts' / 'audio-separator.exe'),
+                                expected_program])
         self.assertEqual(program, expected_program)
         self.assertEqual(arguments, [str(source), '--model_filename', 'htdemucs.yaml',
                                      '--model_file_dir', r'C:\Users\Tester\AppData\Local\808sgn-stem-lab\models',
@@ -72,6 +73,23 @@ class BackendCommandTests(unittest.TestCase):
                 self.assertEqual(args[1:5], ['--model_filename', model,
                                               '--model_file_dir', env['STEM_LAB_MODELS']])
                 self.assertEqual(args[-4:], ['--output_dir', r'C:\Output Dir', '--output_format', 'WAV'])
+
+    def test_windows_prefers_checkout_venv(self):
+        root = PureWindowsPath(r'C:\StemLab')
+        program, _ = m.build_backend_command(
+            'balanced', 'source.wav', 'output', platform='win32', app_root=root,
+            environ={'LOCALAPPDATA': r'C:\Local'}, executable_exists=lambda _: True)
+        self.assertEqual(program, str(root / '.venv' / 'Scripts' / 'audio-separator.exe'))
+
+    def test_windows_explicit_venv_does_not_fall_back(self):
+        seen = []
+        with self.assertRaises(FileNotFoundError):
+            m.build_backend_command(
+                'balanced', 'source.wav', 'output', platform='win32',
+                environ={'STEM_LAB_VENV': r'E:\Missing'},
+                executable_exists=lambda path: seen.append(path) or False)
+        self.assertTrue(seen)
+        self.assertEqual(set(seen), {r'E:\Missing\Scripts\audio-separator.exe'})
 
     def test_windows_missing_executable_has_actionable_diagnostic(self):
         root = PureWindowsPath(r'C:\StemLab\app')
@@ -108,10 +126,10 @@ class QueueTests(unittest.TestCase):
         self.tmp.cleanup()
     def audio(self, name):
         p=self.root/name; p.write_bytes(b'fixture'); return p
-    def wav(self, path, frames=44100, rate=44100):
+    def wav(self, path, frames=44100, rate=44100, channels=2):
         with wave.open(str(path), 'wb') as out:
-            out.setnchannels(2); out.setsampwidth(2); out.setframerate(rate)
-            out.writeframes(b'\0' * frames * 4)
+            out.setnchannels(channels); out.setsampwidth(2); out.setframerate(rate)
+            out.writeframes(b'\0' * frames * channels * 2)
         return path
     def backend_calls(self):
         log = self.root / 'backend_calls'
@@ -629,6 +647,23 @@ for name in ("Bass", "Drums", "Other", "Vocals"):
                 self.assertFalse(self.validate_output())
                 self.assertTrue(all(self.w.queue_list.topLevelItem(0).child(i).text(2) == 'Unverified'
                                     for i in range(4)))
+
+    def test_mono_source_verifies_stereo_four_stems(self):
+        source = self.wav(self.root / 'mono.wav', channels=1)
+        self.w.add_paths([str(source)])
+        for preset in m.FOUR_STEM_PRESETS:
+            with self.subTest(preset=preset):
+                self.w.set_job_preset(0, preset)
+                target = self.w.stem_output_dir(0)
+                target.mkdir(parents=True)
+                self.mark_owned(target, source, preset)
+                paths = self.w.expected_stem_paths(source, preset, target)
+                for path in paths.values():
+                    self.wav(path)
+                self.assertEqual(self.check_state(0), 'VERIFIED EXISTING')
+                for channels in (1, 3):
+                    self.wav(paths['Bass'], channels=channels)
+                    self.assertEqual(self.check_state(0), 'PARTIAL / UNKNOWN')
 
     def test_stem_labels_preserve_original_files(self):
         p = Path('3_(kick)_MDX23C-DrumSep-aufr33-jarredou.wav')
